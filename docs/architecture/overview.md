@@ -78,7 +78,7 @@ The platform uses a **modular monolith** architecture, designed to scale without
 
 ```typescript
 "use client";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase/client";
 
 export function MyComponent() {
   // Use browser client for client-side operations
@@ -97,7 +97,7 @@ export function MyComponent() {
 - **Security:** RLS policies still apply (no elevated privileges)
 
 ```typescript
-import { getServerSupabaseClient } from "@/lib/supabase";
+import { getServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function MyServerComponent() {
   const supabase = await getServerSupabaseClient();

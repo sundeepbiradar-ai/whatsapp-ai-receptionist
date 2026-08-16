@@ -1,9 +1,8 @@
 /**
  * Supabase Client Foundation
  * 
- * This module provides:
- * - Browser client: for client-side operations (use with 'use client')
- * - Server client: for server-side operations (Server Components & Server Actions)
+ * This module provides the browser client and shared Supabase types.
+ * Server code must import directly from './server'.
  * 
  * Both clients use only the public anon key for security.
  * Session management is automatic via cookies.
@@ -18,5 +17,4 @@
  */
 
 export { supabase } from "./client";
-export { createServerSupabaseClient, getServerSupabaseClient } from "./server";
 export type { SupabaseClient, Session, User } from "@supabase/supabase-js";

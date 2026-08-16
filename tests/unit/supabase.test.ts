@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
 describe("Supabase Client Architecture", () => {
@@ -49,19 +52,23 @@ describe("Supabase Client Architecture", () => {
   });
 
   describe("Architecture Separation", () => {
-    it("should have separate client and server modules", async () => {
-      // This verifies that client and server implementations are separate
-      const clientModule = import("@/lib/supabase/client");
-      const serverModule = import("@/lib/supabase/server");
+    it("should mark the server module as server-only", () => {
+      const serverSource = readFileSync(
+        join(process.cwd(), "lib/supabase/server.ts"),
+        "utf8"
+      );
 
-      expect(clientModule).toBeDefined();
-      expect(serverModule).toBeDefined();
+      expect(serverSource).toContain('import "server-only";');
     });
 
-    it("should export proper types from index", async () => {
-      // Verify that index exports proper Supabase types
-      // This test ensures the module structure is correct
-      expect(true).toBe(true);
+    it("should keep server exports out of the browser barrel", () => {
+      const barrelSource = readFileSync(
+        join(process.cwd(), "lib/supabase/index.ts"),
+        "utf8"
+      );
+
+      expect(barrelSource).not.toContain('from "./server"');
+      expect(barrelSource).toContain('export { supabase } from "./client";');
     });
   });
 });
