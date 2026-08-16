@@ -164,6 +164,24 @@ The existing `owner`, `admin`, and `member` enum is exposed as the current
 membership role. Roles are informational in this phase; RLS and database
 constraints prevent client-side role escalation.
 
+## Organization Onboarding and Switching (Phase 2.5)
+
+Users with no organization can open `/onboarding` and submit an organization
+name. The server validates the name and derives a lowercase URL-safe slug. The
+server calls `public.create_organization`, a narrowly scoped `SECURITY DEFINER`
+function that derives the creator from `auth.uid()` and atomically creates the
+organization plus an `owner` membership. The browser cannot provide `user_id`
+or `role`, and the service-role key is not used.
+
+The selected organization is stored as a non-secret, HTTP-only preference cookie.
+It is never proof of access. Every request re-reads the authenticated user's
+memberships through the anon-key SSR client and ignores a cookie that does not
+match an authorized membership. Switching therefore validates membership before
+updating the preference.
+
+**AUTHENTICATION DOES NOT GRANT ORGANIZATION ACCESS.** Existing PostgreSQL RLS
+remains the authoritative authorization layer for all organization data.
+
 ## Project Structure
 
 ```

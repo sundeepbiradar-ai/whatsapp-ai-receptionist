@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { logoutAction } from "@/lib/auth/actions";
 import { getOrganizationContext } from "@/lib/organizations/context";
+import { OrganizationSwitcher } from "@/components/organizations/organization-switcher";
 
 export const metadata: Metadata = {
   title: "Dashboard - AI Customer Operations Platform",
@@ -40,6 +41,9 @@ export default async function DashboardPage(): Promise<React.ReactElement> {
           <section className="mt-8 max-w-4xl rounded-lg border border-amber-200 bg-amber-50 p-6">
             <h2 className="text-xl font-semibold text-amber-950">No organization yet</h2>
             <p className="mt-2 text-amber-900">You don&apos;t belong to an organization yet.</p>
+            <a className="button-primary mt-5" href="/onboarding">
+              Create your organization
+            </a>
           </section>
         )}
         {organizationContext.status === "ready" && (
@@ -53,6 +57,7 @@ export default async function DashboardPage(): Promise<React.ReactElement> {
             <p className="mt-1 text-gray-600">
               Role: <span className="font-medium">{organizationContext.currentRole}</span>
             </p>
+            <OrganizationSwitcher context={organizationContext} />
             {organizationContext.organizations.length > 1 && (
               <div className="mt-6 border-t border-gray-100 pt-4">
                 <p className="text-sm font-medium text-gray-700">Organizations you belong to</p>

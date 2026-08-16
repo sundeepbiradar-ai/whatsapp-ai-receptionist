@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   authFormSchema,
+  getOrganizationValues,
   getAuthErrorMessage,
   getAuthFormValues,
 } from "@/lib/auth/validation";
@@ -29,6 +30,25 @@ describe("authentication validation", () => {
   it("does not expose provider or database error details", () => {
     expect(getAuthErrorMessage(new Error("internal database detail"))).toBe(
       "We could not complete that request. Please try again."
+    );
+  });
+
+  it("generates a URL-safe lowercase organization slug", () => {
+    const formData = new FormData();
+    formData.set("name", "  My First Clinic!  ");
+
+    expect(getOrganizationValues(formData)).toEqual({
+      name: "My First Clinic!",
+      slug: "my-first-clinic",
+    });
+  });
+
+  it("rejects an organization name without slug-compatible characters", () => {
+    const formData = new FormData();
+    formData.set("name", "!!!");
+
+    expect(() => getOrganizationValues(formData)).toThrow(
+      "Organization name must include letters or numbers."
     );
   });
 });

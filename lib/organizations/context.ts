@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cookies } from "next/headers";
 import { getServerSupabaseClient } from "@/lib/supabase/server";
 import {
   resolveOrganizationContext,
@@ -47,6 +48,31 @@ export async function getOrganizationContext(): Promise<OrganizationContext> {
   }
 
   const organizations: Organization[] = organizationRows;
+
+  const selectedOrganizationId = (await cookies()).get("current-organization-id")?.value;
+  if (selectedOrganizationId) {
+    const selectedOrganization = organizations.find(
+      (organization) => organization.id === selectedOrganizationId
+    );
+    if (selectedOrganization) {
+      const selectedMembership = memberships.find(
+        (membership) => membership.organization_id === selectedOrganization.id
+      );
+      if (selectedMembership) {
+        return {
+          status: "ready",
+          user,
+          organizations: organizations.sort((first, second) =>
+            first.created_at.localeCompare(second.created_at)
+          ),
+          memberships,
+          currentOrganization: selectedOrganization,
+          currentMembership: selectedMembership,
+          currentRole: selectedMembership.role,
+        };
+      }
+    }
+  }
 
   return resolveOrganizationContext(user, memberships, organizations);
 }

@@ -16,7 +16,7 @@ const testEmail = `e2e-${randomUUID()}@example.com`;
 const testPassword = `E2eTest-${randomUUID()}-A9!`;
 let setupClient: SupabaseClient<Database> | undefined;
 let userId: string | undefined;
-let organizationId: string | undefined;
+const organizationIds: string[] = [];
 
 test.describe("Supabase Auth browser flow", () => {
   test.skip(
@@ -35,8 +35,8 @@ test.describe("Supabase Auth browser flow", () => {
   });
 
   test.afterAll(async () => {
-    if (setupClient && organizationId) {
-      await setupClient.from("organizations").delete().eq("id", organizationId);
+    if (setupClient && organizationIds.length > 0) {
+      await setupClient.from("organizations").delete().in("id", organizationIds);
     }
     if (setupClient && userId) {
       await setupClient.auth.admin.deleteUser(userId);
@@ -77,24 +77,51 @@ test.describe("Supabase Auth browser flow", () => {
     userId = userResult?.data.users.find((user) => user.email === testEmail)?.id;
     expect(userId).toBeDefined();
 
+    await page.goto("/onboarding");
+    await page.getByLabel("Organization name").fill("E2E Organization");
+    await page.getByRole("button", { name: "Create organization" }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page.getByText("E2E Organization")).toBeVisible();
+    await expect(page.getByText("Role: owner")).toBeVisible();
+
     const organizationResult = await setupClient
       ?.from("organizations")
-      .insert({ name: "E2E Organization", slug: `e2e-${randomUUID()}` })
       .select("id")
+      .eq("name", "E2E Organization")
       .single();
-    organizationId = organizationResult?.data?.id;
+    const organizationId = organizationResult?.data?.id;
     expect(organizationResult?.error).toBeNull();
     expect(organizationId).toBeDefined();
+    if (organizationId) {
+      organizationIds.push(organizationId);
+    }
 
-    const membershipResult = await setupClient?.from("organization_members").insert({
-      organization_id: organizationId ?? "",
+    const secondOrganizationResult = await setupClient
+      ?.from("organizations")
+      .insert({ name: "E2E Organization Two", slug: `e2e-two-${randomUUID()}` })
+      .select("id")
+      .single();
+    expect(secondOrganizationResult?.error).toBeNull();
+    const secondOrganizationId = secondOrganizationResult?.data?.id;
+    expect(secondOrganizationId).toBeDefined();
+    if (!secondOrganizationId) {
+      throw new Error("Second organization fixture was not created");
+    }
+    organizationIds.push(secondOrganizationId);
+
+    const secondMembershipResult = await setupClient?.from("organization_members").insert({
+      organization_id: secondOrganizationId ?? "",
       role: "member",
       user_id: userId ?? "",
     });
-    expect(membershipResult?.error).toBeNull();
+    expect(secondMembershipResult?.error).toBeNull();
 
     await page.reload();
-    await expect(page.getByText("E2E Organization")).toBeVisible();
+    await expect(page.getByLabel("Switch organization")).toBeVisible();
+    await page.getByLabel("Switch organization").selectOption(secondOrganizationId);
+    await page.getByRole("button", { name: "Switch organization" }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page.getByRole("heading", { name: "E2E Organization Two" })).toBeVisible();
     await expect(page.getByText("Role: member")).toBeVisible();
 
     await page.getByRole("button", { name: "Log out" }).click();

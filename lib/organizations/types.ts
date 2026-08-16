@@ -28,6 +28,7 @@ export type OrganizationContext =
       status: "ready";
       user: User;
       organizations: Organization[];
+      memberships: OrganizationMembership[];
       currentOrganization: Organization;
       currentMembership: OrganizationMembership;
       currentRole: OrganizationRole;
@@ -83,6 +84,7 @@ export function resolveOrganizationContext(
     status: "ready",
     user,
     organizations: authorizedOrganizations,
+    memberships,
     currentOrganization,
     currentMembership,
     currentRole: currentMembership.role,

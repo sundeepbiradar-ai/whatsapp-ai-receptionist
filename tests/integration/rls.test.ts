@@ -402,4 +402,28 @@ integrationDescribe("Runtime RLS security", () => {
     expect(duplicateSlugResult.error).not.toBeNull();
     expect(duplicateMembershipResult.error).not.toBeNull();
   });
+
+  it("creates an organization atomically for the authenticated user as owner", async () => {
+    const slug = `rls-created-${randomUUID()}`;
+    const creationResult = await userAClient.rpc("create_organization", {
+      organization_name: "RLS Created Organization",
+      organization_slug: slug,
+    } as never);
+
+    expect(creationResult.error).toBeNull();
+    if (!creationResult.data) {
+      throw new Error("Organization creation did not return an organization");
+    }
+    createdOrganizationIds.push(creationResult.data.id);
+
+    const ownerResult = await userAClient
+      .from("organization_members")
+      .select("role")
+      .eq("organization_id", creationResult.data.id)
+      .eq("user_id", fixture.userA.id)
+      .single();
+
+    expect(ownerResult.error).toBeNull();
+    expect(ownerResult.data?.role).toBe("owner");
+  });
 });

@@ -93,6 +93,13 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      create_organization: {
+        Args: {
+          organization_name: string;
+          organization_slug: string;
+        };
+        Returns: Database["public"]["Tables"]["organizations"]["Row"];
+      };
       is_organization_member: {
         Args: {
           target_organization_id: string;
