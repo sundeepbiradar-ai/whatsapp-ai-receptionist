@@ -1,8 +1,8 @@
 # Architecture Overview
 
-## Phase 1: Foundation
+## Phase 1 & 2.1: Foundation and Supabase Setup
 
-This document describes the Phase 1 foundation architecture of the AI Customer Operations Platform.
+This document describes the architecture of the AI Customer Operations Platform after Phase 1 (Foundation) and Phase 2.1 (Supabase Foundation).
 
 ## High-Level Design
 
@@ -16,15 +16,16 @@ The platform uses a **modular monolith** architecture, designed to scale without
 4. **Type-Safe**: TypeScript strict mode throughout
 5. **Testable**: Clear separation of concerns for testing
 6. **Secure-First**: Security considerations built into the foundation
+7. **Client-Server Separation**: Strict boundaries between browser and server code
 
 ## Technology Stack
 
 ### Frontend
 
-- **Framework**: Next.js 15 with App Router
+- **Framework**: Next.js 16 with App Router
 - **Language**: TypeScript with strict mode
 - **Styling**: Tailwind CSS
-- **Components**: shadcn/ui
+- **Components**: shadcn/ui (foundation ready)
 - **Runtime**: React 18
 
 ### Backend
@@ -34,11 +35,19 @@ The platform uses a **modular monolith** architecture, designed to scale without
 - **Server Components**: React Server Components
 - **Server Actions**: Selective use for mutations
 
-### Database & Services (Phase 2+)
+### Database & Services
 
-- **Database**: Supabase PostgreSQL
-- **Authentication**: Supabase Auth
-- **Validation**: Zod
+**Phase 2.1 (Current):**
+- **Database**: Supabase PostgreSQL (configured but no schema yet)
+- **Authentication**: Supabase Auth (foundation only, not yet implemented)
+- **Client Libraries**: @supabase/supabase-js, @supabase/ssr
+- **Validation**: Zod (ready for Phase 2.2+)
+
+**Phase 2.2+:**
+- Database schema and migrations
+- Row-Level Security (RLS) policies
+- Authentication implementation
+- Authorization framework
 
 ### Development & Testing
 
@@ -47,6 +56,76 @@ The platform uses a **modular monolith** architecture, designed to scale without
 - **Linting**: ESLint with TypeScript support
 - **Formatting**: Prettier
 - **CI/CD**: GitHub Actions
+
+### Security & Infrastructure
+
+- **Environment Secrets**: Managed via environment variables
+- **HTTP-Only Cookies**: Session management
+- **Public vs Private Keys**: Strict separation
+- **Row-Level Security**: For multi-tenant data isolation (Phase 2.2+)
+
+## Supabase Client Architecture (Phase 2.1)
+
+### Browser Client
+
+**Location:** `lib/supabase/client.ts`
+
+- **Created with:** `@supabase/ssr` createBrowserClient
+- **Keys Used:** NEXT_PUBLIC_SUPABASE_ANON_KEY (public, safe to expose)
+- **Usage:** Client components with `"use client"` directive
+- **Session Management:** Automatic via HTTP-only cookies
+- **Security:** Row-Level Security (RLS) policies enforce data access
+
+```typescript
+"use client";
+import { supabase } from "@/lib/supabase";
+
+export function MyComponent() {
+  // Use browser client for client-side operations
+  const { data } = await supabase.from("users").select("*");
+}
+```
+
+### Server Client
+
+**Location:** `lib/supabase/server.ts`
+
+- **Created with:** `@supabase/ssr` createServerClient
+- **Keys Used:** NEXT_PUBLIC_SUPABASE_ANON_KEY (same public key)
+- **Usage:** Server components, Server Actions, Route Handlers
+- **Session Management:** Automatic via cookies() from next/headers
+- **Security:** RLS policies still apply (no elevated privileges)
+
+```typescript
+import { getServerSupabaseClient } from "@/lib/supabase";
+
+export async function MyServerComponent() {
+  const supabase = await getServerSupabaseClient();
+  const { data } = await supabase.from("users").select("*");
+}
+```
+
+### Key Security Points
+
+1. **No Service-Role Key in Application**
+   - Service-role key is NOT used in Phase 2.1
+   - Only public anon key is used for browser and server clients
+   - Service-role key reserved for admin operations (future)
+
+2. **Environment Variables**
+   - `NEXT_PUBLIC_SUPABASE_URL` — Public, sent to browser
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Public, sent to browser
+   - `SUPABASE_SERVICE_ROLE_KEY` — Server-only (if needed in future)
+
+3. **Client vs Server Boundaries**
+   - Browser client cannot import server-only modules
+   - Server modules can be used in Server Components and Actions
+   - TypeScript ensures client/server separation
+
+4. **RLS Policies (Phase 2.2+)**
+   - All data access controlled via Row-Level Security
+   - Policies automatically enforce multi-tenant isolation
+   - No additional authorization logic needed for basic scenarios
 
 ## Project Structure
 
@@ -72,8 +151,11 @@ features/                     # Business domain features
 └── [other domains]/          # Future features
 
 lib/                          # Utilities and helpers
-├── supabase/                 # Supabase client setup (Phase 2)
-├── auth/                     # Authentication utilities (Phase 2)
+├── supabase/                 # Supabase client setup (Phase 2.1)
+│   ├── client.ts            # Browser client for client components
+│   ├── server.ts            # Server client for server components
+│   └── index.ts             # Client exports
+├── auth/                     # Authentication utilities (Phase 2.2+)
 └── utils/                    # Generic utility functions
 
 types/                        # TypeScript type definitions
@@ -125,40 +207,76 @@ Configuration Files:
 4. Response sent with appropriate status code
 5. Error handling returns typed error response
 
-## Phase 1 Scope
+## Phase 1 & 2.1 Scope
 
-This foundation establishes:
+**Phase 1 (Completed):**
 
 ✅ Project structure and organization
 ✅ TypeScript strict mode setup
 ✅ Build pipeline (development and production)
-✅ Testing infrastructure
+✅ Testing infrastructure (Vitest, Playwright)
 ✅ Component foundation
 ✅ Layout foundation
 ✅ Documentation structure
+✅ Security foundation
+✅ GitHub Actions CI/CD
 
-⏸️ **NOT included in Phase 1:**
+**Phase 2.1 (Supabase Foundation - Current):**
 
-- Authentication system
-- Database schema
+✅ Supabase client libraries (@supabase/supabase-js, @supabase/ssr)
+✅ Browser and server client separation
+✅ Environment variable configuration
+✅ Client/server boundaries and security
+✅ TypeScript database types (placeholder)
+✅ Supabase documentation
+✅ Foundation tests
+
+**NOT included in Phase 2.1:**
+
+- Authentication implementation
+- Database schema or migrations
+- Row-Level Security (RLS) policies
+- User registration or login UI
+- Organization management tables
+- Roles or permissions
 - API endpoints
 - WhatsApp integration
 - AI assistants
 - Appointment management
 - Billing system
 
+**Planned for Phase 2.2+:**
+
+- Database schema and migrations
+- RLS policies for multi-tenancy
+- Authentication flow implementation
+- User and organization management
+- Authorization framework
+- API endpoints
+
 ## Development Environment
 
 ### Required Setup
 
 ```bash
-npm install                   # Install dependencies
+npm ci                        # Install dependencies with lock file
 npm run dev                   # Start development server
 npm run lint                  # Run linting
 npm run typecheck            # TypeScript type checking
 npm test                     # Run unit tests
 npm run test:e2e             # Run E2E tests
 npm run build                # Production build
+```
+
+### Environment Variables
+
+```bash
+# Copy template
+cp .env.example .env.local
+
+# Add your Supabase credentials:
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
 
 ### Development Server

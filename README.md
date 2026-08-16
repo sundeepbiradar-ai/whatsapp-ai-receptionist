@@ -6,15 +6,16 @@
 
 **AI Customer Operations Platform** is a production-grade, multi-tenant SaaS application built with Next.js, TypeScript, and Supabase. Initially targeting clinics, the architecture is designed to scale across multiple industries including diagnostic labs, salons, spas, gyms, coaching businesses, and consulting services.
 
-**Current Phase**: Phase 1 — Foundation
+**Current Phase**: Phase 2.1 — Supabase Foundation
 
 ## Quick Start
 
 ### Prerequisites
 
 - Node.js 18+ (latest LTS recommended)
-- npm or pnpm
+- npm 9+ (uses npm ci with lock files)
 - Git
+- Supabase account (optional for development, required for deployment)
 
 ### Installation
 
@@ -23,14 +24,32 @@
 git clone https://github.com/sundeepbiradar-ai/whatsapp-ai-receptionist.git
 cd whatsapp-ai-receptionist
 
-# Install dependencies
-npm install
+# Install dependencies with lock file
+npm ci
+
+# Copy environment template
+cp .env.example .env.local
+
+# Add Supabase credentials to .env.local:
+# NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 # Start development server
 npm run dev
 ```
 
 Visit `http://localhost:3000` to see the application.
+
+### Environment Variables
+
+**Required:**
+- `NEXT_PUBLIC_SUPABASE_URL` — Your Supabase project URL (public)
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Your Supabase anonymous key (public)
+
+**Optional (future phases):**
+- `SUPABASE_SERVICE_ROLE_KEY` — Server-only admin key (do NOT expose to browser)
+
+See `.env.example` for details.
 
 ## Available Scripts
 
@@ -67,8 +86,11 @@ ai-customer-operations-platform/
 │   ├── customers/                # Customer management
 │   └── conversations/            # Conversation management
 ├── lib/                          # Utilities and helpers
-│   ├── supabase/                 # Supabase client (Phase 2+)
-│   ├── auth/                     # Auth utilities (Phase 2+)
+│   ├── supabase/                 # Supabase client (Phase 2.1)
+│   │   ├── client.ts            # Browser client
+│   │   ├── server.ts            # Server client
+│   │   └── index.ts             # Exports
+│   ├── auth/                     # Auth utilities (Phase 2.2+)
 │   └── utils/                    # Generic utilities
 ├── types/                        # TypeScript type definitions
 ├── supabase/                     # Supabase configuration
