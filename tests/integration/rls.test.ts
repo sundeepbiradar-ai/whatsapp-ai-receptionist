@@ -143,12 +143,12 @@ integrationDescribe("Runtime RLS security", () => {
     }
     createdOrganizationIds.push(organizationBResult.data.id);
 
-    const profilesResult = await setupClient.from("profiles").insert([
-      { id: userA.id },
-      { id: userB.id },
-    ]);
-    if (profilesResult.error) {
-      throw profilesResult.error;
+    const profilesResult = await setupClient
+      .from("profiles")
+      .select("id")
+      .in("id", [userA.id, userB.id]);
+    if (profilesResult.error || profilesResult.data.length !== 2) {
+      throw profilesResult.error ?? new Error("Auth profile trigger did not create both profiles");
     }
 
     const membershipsResult = await setupClient

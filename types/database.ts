@@ -15,11 +15,4 @@
  * DO NOT import these types until tables are defined.
  */
 
-export interface Database {
-  public: {
-    Tables: Record<string, unknown>;
-    Views: Record<string, unknown>;
-    Functions: Record<string, unknown>;
-    Enums: Record<string, unknown>;
-  };
-}
+export type { Database } from '@/lib/supabase/database';

@@ -42,25 +42,29 @@ test.describe("Homepage", () => {
     const dashboardLink = page.locator('a:has-text("View Dashboard")');
     await dashboardLink.click();
 
-    // Should be on dashboard page
-    await expect(page).toHaveURL("/dashboard");
+    // Unauthenticated users must be sent to login
+    await expect(page).toHaveURL("/login");
   });
 });
 
-test.describe("Dashboard", () => {
-  test("should display dashboard page", async ({ page }) => {
-    await page.goto("/dashboard");
+test.describe("Authentication", () => {
+  test("should load the login page", async ({ page }) => {
+    await page.goto("/login");
 
-    // Check for dashboard heading
-    const heading = page.locator("h1");
-    await expect(heading).toContainText("Dashboard");
+    await expect(page.locator("h1")).toContainText("Welcome back");
+    await expect(page.getByLabel("Email address")).toBeVisible();
   });
 
-  test("should show foundation ready message", async ({ page }) => {
+  test("should load the signup page", async ({ page }) => {
+    await page.goto("/signup");
+
+    await expect(page.locator("h1")).toContainText("Create your account");
+    await expect(page.getByLabel("Password")).toBeVisible();
+  });
+
+  test("should redirect unauthenticated dashboard access to login", async ({ page }) => {
     await page.goto("/dashboard");
 
-    // Check for foundation ready section
-    const foundationReady = page.locator("text=Foundation Ready");
-    await expect(foundationReady).toBeVisible();
+    await expect(page).toHaveURL("/login");
   });
 });

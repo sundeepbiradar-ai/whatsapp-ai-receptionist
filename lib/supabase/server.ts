@@ -10,18 +10,9 @@
 
 import "server-only";
 
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/lib/supabase/database";
-
-const supabaseUrl = process.env["NEXT_PUBLIC_SUPABASE_URL"];
-const supabaseAnonKey = process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"];
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    "Missing Supabase environment variables. Ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set."
-  );
-}
 
 /**
  * Create a server-side Supabase client
@@ -29,6 +20,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
  * Automatically manages session via cookies
  */
 export async function createServerSupabaseClient() {
+  const supabaseUrl = process.env["NEXT_PUBLIC_SUPABASE_URL"];
+  const supabaseAnonKey = process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"];
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      "Missing Supabase environment variables. Ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set."
+    );
+  }
+
   const cookieStore = await cookies();
 
   return createServerClient<Database>(
@@ -36,13 +36,14 @@ export async function createServerSupabaseClient() {
     supabaseAnonKey as string,
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll();
+        get(name: string) {
+          return cookieStore.get(name)?.value;
         },
-        setAll(cookiesList: Array<{ name: string; value: string; options?: Record<string, unknown> }>) {
-          cookiesList.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options as Record<string, unknown>);
-          });
+        set(name: string, value: string, options: CookieOptions) {
+          cookieStore.set(name, value, options);
+        },
+        remove(name: string, options: CookieOptions) {
+          cookieStore.set(name, "", { ...options, maxAge: 0 });
         },
       },
     }

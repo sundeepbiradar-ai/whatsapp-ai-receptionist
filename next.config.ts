@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_NAME: "AI Customer Operations Platform",
     NEXT_PUBLIC_APP_VERSION: "0.1.0",
   },
+  allowedDevOrigins: ["127.0.0.1"],
 };
 
 export default nextConfig;
