@@ -182,6 +182,45 @@ updating the preference.
 **AUTHENTICATION DOES NOT GRANT ORGANIZATION ACCESS.** Existing PostgreSQL RLS
 remains the authoritative authorization layer for all organization data.
 
+## Domain Data Access (Phase 3.3)
+
+Phase 3.3 provides server-only repositories for contacts, conversations,
+messages, and appointments under `lib/domain/`. Each repository imports
+`server-only`, resolves the existing organization context, scopes queries to the
+current organization, and uses the normal SSR anon-key client. No repository
+uses the service-role key or trusts a client-provided tenant ID.
+
+Validation is shared and typed. Repository writes construct explicit allowed
+fields rather than spreading request objects. Database errors are translated to
+small typed domain errors, while PostgreSQL RLS and the approved composite
+foreign keys remain authoritative for authorization and same-tenant integrity.
+
+## Core Domain Contract (Phase 3.1)
+
+Phase 3.1 defines the contract for four future organization-owned entities. It
+does not create SQL tables, migrations, RLS policies, UI, or domain workflows.
+The contract is maintained in `lib/domain/schema-contract.ts` and covered by
+static tests in `tests/unit/database-domain-schema.test.ts`.
+
+The intended graph is:
+
+```text
+organizations -> contacts -> conversations -> messages
+organizations -> appointments -> contacts
+appointments -> optional conversations
+```
+
+Every entity uses `organization_id` as its tenant boundary. Contacts are unique
+by `(organization_id, phone_number)`. Conversations, messages, and appointments
+must preserve same-organization relationships with their referenced contacts
+and conversations. Appointment time must satisfy `ends_at > starts_at`.
+
+The intended PostgreSQL enums are `conversation_status` (`open`, `closed`),
+`message_direction` (`inbound`, `outbound`), and `appointment_status` (`pending`,
+`confirmed`, `cancelled`, `completed`). All four future tables require RLS with
+membership-based organization access. The SQL migration and runtime RLS work
+are explicitly deferred to Phase 3.2 and later validation milestones.
+
 ## Project Structure
 
 ```

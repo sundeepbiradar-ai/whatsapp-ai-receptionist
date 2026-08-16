@@ -11,6 +11,7 @@
 import "server-only";
 
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import type { Database } from "@/lib/supabase/database";
 
@@ -19,7 +20,9 @@ import type { Database } from "@/lib/supabase/database";
  * Must be called in a Server Component or Server Action
  * Automatically manages session via cookies
  */
-export async function createServerSupabaseClient() {
+type TypedServerSupabaseClient = SupabaseClient<Database, "public", "public", Database["public"]>;
+
+export async function createServerSupabaseClient(): Promise<TypedServerSupabaseClient> {
   const supabaseUrl = process.env["NEXT_PUBLIC_SUPABASE_URL"];
   const supabaseAnonKey = process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"];
 
@@ -31,6 +34,9 @@ export async function createServerSupabaseClient() {
 
   const cookieStore = await cookies();
 
+  // @supabase/ssr 0.1.0 passes its schema generic in the older SupabaseClient
+  // position; the runtime client is the same and this preserves the approved
+  // generated public schema for typed repository operations.
   return createServerClient<Database>(
     supabaseUrl as string,
     supabaseAnonKey as string,
@@ -47,7 +53,7 @@ export async function createServerSupabaseClient() {
         },
       },
     }
-  );
+  ) as unknown as TypedServerSupabaseClient;
 }
 
 /**
