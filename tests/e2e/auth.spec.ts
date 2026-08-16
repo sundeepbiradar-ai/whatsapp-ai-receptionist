@@ -16,6 +16,7 @@ const testEmail = `e2e-${randomUUID()}@example.com`;
 const testPassword = `E2eTest-${randomUUID()}-A9!`;
 let setupClient: SupabaseClient<Database> | undefined;
 let userId: string | undefined;
+let organizationId: string | undefined;
 
 test.describe("Supabase Auth browser flow", () => {
   test.skip(
@@ -34,6 +35,9 @@ test.describe("Supabase Auth browser flow", () => {
   });
 
   test.afterAll(async () => {
+    if (setupClient && organizationId) {
+      await setupClient.from("organizations").delete().eq("id", organizationId);
+    }
     if (setupClient && userId) {
       await setupClient.auth.admin.deleteUser(userId);
     }
@@ -67,10 +71,31 @@ test.describe("Supabase Auth browser flow", () => {
     await page.getByLabel("Password").fill(testPassword);
     await page.getByRole("button", { name: "Log in" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page.getByText("You don't belong to an organization yet.")).toBeVisible();
 
     const userResult = await setupClient?.auth.admin.listUsers({ page: 1, perPage: 100 });
     userId = userResult?.data.users.find((user) => user.email === testEmail)?.id;
     expect(userId).toBeDefined();
+
+    const organizationResult = await setupClient
+      ?.from("organizations")
+      .insert({ name: "E2E Organization", slug: `e2e-${randomUUID()}` })
+      .select("id")
+      .single();
+    organizationId = organizationResult?.data?.id;
+    expect(organizationResult?.error).toBeNull();
+    expect(organizationId).toBeDefined();
+
+    const membershipResult = await setupClient?.from("organization_members").insert({
+      organization_id: organizationId ?? "",
+      role: "member",
+      user_id: userId ?? "",
+    });
+    expect(membershipResult?.error).toBeNull();
+
+    await page.reload();
+    await expect(page.getByText("E2E Organization")).toBeVisible();
+    await expect(page.getByText("Role: member")).toBeVisible();
 
     await page.getByRole("button", { name: "Log out" }).click();
     await expect(page).toHaveURL(/\/login$/);

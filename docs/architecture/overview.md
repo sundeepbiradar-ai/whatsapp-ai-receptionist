@@ -127,6 +127,43 @@ export async function MyServerComponent() {
    - Policies automatically enforce multi-tenant isolation
    - No additional authorization logic needed for basic scenarios
 
+## Organization and Tenant Context (Phase 2.4)
+
+### Authentication Is Not Authorization
+
+**AUTHENTICATION != TENANT AUTHORIZATION**
+
+Supabase Auth establishes the identity of the current user. It does not grant
+access to any organization. Organization authorization is determined by
+`public.organization_members` and enforced by PostgreSQL Row-Level Security.
+
+### Current Organization Resolution
+
+The server-only abstraction at `lib/organizations/context.ts`:
+
+1. obtains the user with Supabase Auth;
+2. reads that user's membership rows through the anon-key SSR client;
+3. reads only the organizations referenced by those membership rows;
+4. relies on existing RLS for the final authorization boundary;
+5. exposes the current organization, membership, and role as typed data.
+
+The current organization is selected deterministically by the oldest membership
+creation timestamp. No client-controlled organization ID is trusted, persisted,
+or used as authorization. Organization switching is deferred to a future
+milestone and must revalidate membership server-side.
+
+Users with no memberships receive an explicit onboarding state:
+`You don't belong to an organization yet.` No organization or membership is
+created automatically.
+
+Users with multiple memberships receive the authorized organization list and a
+deterministic current organization. No switching or organization-management UI
+is implemented in this phase.
+
+The existing `owner`, `admin`, and `member` enum is exposed as the current
+membership role. Roles are informational in this phase; RLS and database
+constraints prevent client-side role escalation.
+
 ## Project Structure
 
 ```

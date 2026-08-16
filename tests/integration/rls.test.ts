@@ -241,27 +241,35 @@ integrationDescribe("Runtime RLS security", () => {
   it("isolates membership reads by organization membership", async () => {
     const userAOwn = await userAClient
       .from("organization_members")
-      .select("id")
+      .select("id, role")
       .eq("id", fixture.membershipAId);
     const userAOther = await userAClient
       .from("organization_members")
-      .select("id")
+      .select("id, role")
       .eq("id", fixture.membershipBId);
     const userBOwn = await userBClient
       .from("organization_members")
-      .select("id")
+      .select("id, role")
       .eq("id", fixture.membershipBId);
     const userBOther = await userBClient
       .from("organization_members")
-      .select("id")
+      .select("id, role")
       .eq("id", fixture.membershipAId);
 
     expect(userAOwn.error).toBeNull();
     expect(userAOwn.data).toHaveLength(1);
+    if (!userAOwn.data) {
+      throw new Error("User A membership was not returned");
+    }
+    expect(userAOwn.data[0]?.role).toBe("member");
     expect(userAOther.error).toBeNull();
     expect(userAOther.data).toHaveLength(0);
     expect(userBOwn.error).toBeNull();
     expect(userBOwn.data).toHaveLength(1);
+    if (!userBOwn.data) {
+      throw new Error("User B membership was not returned");
+    }
+    expect(userBOwn.data[0]?.role).toBe("member");
     expect(userBOther.error).toBeNull();
     expect(userBOther.data).toHaveLength(0);
   });
