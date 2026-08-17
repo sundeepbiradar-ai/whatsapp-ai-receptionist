@@ -41,23 +41,17 @@ test.describe("Appointments UI", () => {
   });
 
   test("shows the appointment list, creates an appointment, edits it, and updates status", async ({ page }) => {
-    await page.goto("/signup");
+    const createdUser = await admin?.auth.admin.createUser({ email, password, email_confirm: true });
+    expect(createdUser?.error).toBeNull();
+    userId = createdUser?.data.user?.id;
+    expect(userId).toBeDefined();
+
+    await page.goto("/login");
     await page.getByLabel("Email address").fill(email);
     await page.getByLabel("Password").fill(password);
-    await page.getByRole("button", { name: "Create account" }).click();
-    await expect(page).toHaveURL(/\/(dashboard|login)$/);
-
-    if (page.url().endsWith("/login")) {
-      await page.getByLabel("Email address").fill(email);
-      await page.getByLabel("Password").fill(password);
-      await page.getByRole("button", { name: "Log in" }).click();
-    }
+    await page.getByRole("button", { name: "Log in" }).click();
 
     await expect(page).toHaveURL(/\/dashboard$/);
-
-    const users = await admin?.auth.admin.listUsers({ page: 1, perPage: 100 });
-    userId = users?.data.users.find((user) => user.email === email)?.id;
-    expect(userId).toBeDefined();
 
     await page.goto("/onboarding");
     await page.getByLabel("Organization name").fill(organizationName);
@@ -68,6 +62,11 @@ test.describe("Appointments UI", () => {
     organizationId = organization?.data?.id;
     expect(organization?.error).toBeNull();
     expect(organizationId).toBeDefined();
+
+    const schedulingSettings = await admin?.from("organization_scheduling_settings").insert({
+      organization_id: organizationId ?? "",
+    });
+    expect(schedulingSettings?.error).toBeNull();
 
     const contact = await admin?.from("contacts").insert({
       organization_id: organizationId ?? "",

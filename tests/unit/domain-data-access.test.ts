@@ -4,7 +4,18 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { DomainError, mapDomainDatabaseError } from '@/lib/domain/errors';
-import { appointmentCreateSchema, contactCreateSchema, messageCreateSchema } from '@/lib/domain/validation';
+import {
+  appointmentCreateSchema,
+  assertAppointmentContactConsistency,
+  assertAppointmentStartInFuture,
+  assertAppointmentStatusTransition,
+  assertAppointmentTimeRange,
+  assertAppointmentUpdatePolicy,
+  contactCreateSchema,
+  messageCreateSchema,
+  parseAppointmentCreate,
+  parseAppointmentUpdate,
+} from '@/lib/domain/validation';
 
 const repositoryFiles = [
   'appointments/repository.ts',
@@ -29,6 +40,69 @@ describe('domain data-access validation', () => {
     expect(messageCreateSchema.safeParse({ conversationId: 'not-an-id', direction: 'inbound', content: 'x' }).success).toBe(false);
     expect(messageCreateSchema.safeParse({ conversationId: '00000000-0000-0000-0000-000000000001', direction: 'inbound', content: '  ' }).success).toBe(false);
     expect(appointmentCreateSchema.safeParse({ contactId: '00000000-0000-0000-0000-000000000001', startsAt: '2026-01-01T11:00:00Z', endsAt: '2026-01-01T10:00:00Z' }).success).toBe(false);
+  });
+
+  it('enforces appointment time policies with stable domain errors', () => {
+    expect(() => assertAppointmentStartInFuture('2026-01-01T10:00:00.000Z', new Date('2026-01-01T10:00:00.000Z'))).toThrowError(
+      expect.objectContaining({ code: 'appointment_past' })
+    );
+    expect(() => assertAppointmentTimeRange('2026-01-01T11:00:00.000Z', '2026-01-01T10:00:00.000Z')).toThrowError(
+      expect.objectContaining({ code: 'appointment_time_invalid' })
+    );
+    expect(() => parseAppointmentCreate({
+      contactId: '00000000-0000-0000-0000-000000000001',
+      startsAt: '2026-01-01T11:00:00Z',
+      endsAt: '2026-01-01T10:00:00Z',
+    })).toThrowError(expect.objectContaining({ code: 'appointment_time_invalid' }));
+    expect(parseAppointmentUpdate({ notes: 'Historical note' })).toEqual({ notes: 'Historical note' });
+  });
+
+  it('enforces the normal appointment status transition matrix', () => {
+    expect(() => assertAppointmentStatusTransition('pending', 'confirmed')).not.toThrow();
+    expect(() => assertAppointmentStatusTransition('pending', 'cancelled')).not.toThrow();
+    expect(() => assertAppointmentStatusTransition('confirmed', 'completed')).not.toThrow();
+    expect(() => assertAppointmentStatusTransition('confirmed', 'cancelled')).not.toThrow();
+    expect(() => assertAppointmentStatusTransition('pending', 'completed')).toThrowError(
+      expect.objectContaining({ code: 'appointment_transition_invalid' })
+    );
+    expect(() => assertAppointmentStatusTransition('cancelled', 'pending')).toThrowError(
+      expect.objectContaining({ code: 'appointment_terminal' })
+    );
+    expect(() => assertAppointmentStatusTransition('completed', 'cancelled')).toThrowError(
+      expect.objectContaining({ code: 'appointment_terminal' })
+    );
+  });
+
+  it('enforces same-contact conversation relationships', () => {
+    expect(() => assertAppointmentContactConsistency('contact-a', 'contact-b')).toThrowError(
+      expect.objectContaining({ code: 'appointment_relationship_invalid' })
+    );
+    expect(() => assertAppointmentContactConsistency('contact-a', 'contact-a')).not.toThrow();
+  });
+
+  it('allows only notes and status changes after an appointment starts', () => {
+    const current = {
+      status: 'confirmed' as const,
+      startsAt: '2026-01-01T10:00:00.000Z',
+      endsAt: '2026-01-01T11:00:00.000Z',
+      contactId: 'contact-a',
+      conversationId: 'conversation-a',
+    };
+    expect(() => assertAppointmentUpdatePolicy(
+      current,
+      { ...current, status: 'cancelled' },
+      new Date('2026-01-01T10:30:00.000Z')
+    )).not.toThrow();
+    expect(() => assertAppointmentUpdatePolicy(
+      current,
+      { ...current, contactId: 'contact-b' },
+      new Date('2026-01-01T10:30:00.000Z')
+    )).toThrowError(expect.objectContaining({ code: 'appointment_past' }));
+    expect(() => assertAppointmentUpdatePolicy(
+      { ...current, status: 'cancelled' },
+      { ...current, status: 'pending' },
+      new Date('2025-12-01T00:00:00.000Z')
+    )).toThrowError(expect.objectContaining({ code: 'appointment_terminal' }));
   });
 
   it('maps database errors without exposing internals', () => {

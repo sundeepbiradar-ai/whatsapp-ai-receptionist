@@ -36,17 +36,15 @@ test.describe("Contacts UI", () => {
   });
 
   test("creates, views, edits, and deletes a contact", async ({ page }) => {
-    await page.goto("/signup");
+    const createdUser = await admin?.auth.admin.createUser({ email, password, email_confirm: true });
+    expect(createdUser?.error).toBeNull();
+    userId = createdUser?.data.user?.id;
+    expect(userId).toBeDefined();
+
+    await page.goto("/login");
     await page.getByLabel("Email address").fill(email);
     await page.getByLabel("Password").fill(password);
-    await page.getByRole("button", { name: "Create account" }).click();
-    await expect(page).toHaveURL(/\/(dashboard|login)$/);
-
-    if (page.url().endsWith("/login")) {
-      await page.getByLabel("Email address").fill(email);
-      await page.getByLabel("Password").fill(password);
-      await page.getByRole("button", { name: "Log in" }).click();
-    }
+    await page.getByRole("button", { name: "Log in" }).click();
 
     await expect(page).toHaveURL(/\/dashboard$/);
     await page.goto("/onboarding");
@@ -54,9 +52,6 @@ test.describe("Contacts UI", () => {
     await page.getByRole("button", { name: "Create organization" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
 
-    const users = await admin?.auth.admin.listUsers({ page: 1, perPage: 100 });
-    userId = users?.data.users.find((user) => user.email === email)?.id;
-    expect(userId).toBeDefined();
     const organization = await admin?.from("organizations").select("id").eq("name", organizationName).single();
     organizationId = organization?.data?.id;
     expect(organization?.error).toBeNull();

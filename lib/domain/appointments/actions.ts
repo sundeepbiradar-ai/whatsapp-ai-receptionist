@@ -5,14 +5,16 @@ import { redirect } from "next/navigation";
 
 import { DomainError } from "@/lib/domain/errors";
 import {
-  createAppointment,
+  bookAppointment,
+  getAppointment,
+  rescheduleAppointment,
   updateAppointment,
 } from "@/lib/domain/appointments/repository";
 import {
-  appointmentCreateSchema,
   appointmentStatusSchema,
-  appointmentUpdateSchema,
   idSchema,
+  parseAppointmentCreate,
+  parseAppointmentUpdate,
   parseDomain,
 } from "@/lib/domain/validation";
 
@@ -56,8 +58,8 @@ export async function createAppointmentAction(
 ): Promise<AppointmentActionState> {
   let appointmentId: string | undefined;
   try {
-    const input = parseDomain(appointmentCreateSchema, normalizedValues(formData));
-    const appointment = await createAppointment(input);
+    const input = parseAppointmentCreate(normalizedValues(formData));
+    const appointment = await bookAppointment(input);
     appointmentId = appointment.id;
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/appointments");
@@ -79,8 +81,25 @@ export async function updateAppointmentAction(
 ): Promise<AppointmentActionState> {
   try {
     const validId = parseDomain(idSchema, appointmentId);
-    const input = parseDomain(appointmentUpdateSchema, normalizedValues(formData));
-    await updateAppointment(validId, input);
+    const input = parseAppointmentUpdate(normalizedValues(formData));
+    const current = await getAppointment(validId);
+    const startsAt = input.startsAt ?? current.starts_at;
+    const endsAt = input.endsAt ?? current.ends_at;
+    const scheduleChanged =
+      new Date(startsAt).getTime() !== new Date(current.starts_at).getTime() ||
+      new Date(endsAt).getTime() !== new Date(current.ends_at).getTime();
+    if (scheduleChanged) {
+      await rescheduleAppointment(validId, { startsAt, endsAt });
+    }
+    const remainingInput = {
+      contactId: input.contactId,
+      conversationId: input.conversationId,
+      status: input.status,
+      notes: input.notes,
+    };
+    if (Object.keys(remainingInput).length > 0) {
+      await updateAppointment(validId, remainingInput);
+    }
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/appointments");
     revalidatePath(`/dashboard/appointments/${validId}`);

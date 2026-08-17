@@ -1,9 +1,10 @@
 import type { User } from "@supabase/supabase-js";
 
-import type { Database, OrganizationRole } from "@/lib/supabase/database";
+import type { Database } from "@/lib/supabase/database";
 
 type Organization = Database["public"]["Tables"]["organizations"]["Row"];
 type OrganizationMembership = Database["public"]["Tables"]["organization_members"]["Row"];
+type OrganizationRole = Database["public"]["Enums"]["organization_role"];
 
 export type { Organization, OrganizationMembership };
 
