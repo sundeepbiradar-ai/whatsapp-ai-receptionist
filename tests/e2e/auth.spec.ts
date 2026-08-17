@@ -14,6 +14,8 @@ const hasAuthEnvironment = Boolean(
 
 const testEmail = `e2e-${randomUUID()}@example.com`;
 const testPassword = `E2eTest-${randomUUID()}-A9!`;
+const organizationName = `E2E Organization ${randomUUID()}`;
+const secondOrganizationName = `E2E Organization Two ${randomUUID()}`;
 let setupClient: SupabaseClient<Database> | undefined;
 let userId: string | undefined;
 const organizationIds: string[] = [];
@@ -78,16 +80,16 @@ test.describe("Supabase Auth browser flow", () => {
     expect(userId).toBeDefined();
 
     await page.goto("/onboarding");
-    await page.getByLabel("Organization name").fill("E2E Organization");
+    await page.getByLabel("Organization name").fill(organizationName);
     await page.getByRole("button", { name: "Create organization" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
-    await expect(page.getByText("E2E Organization")).toBeVisible();
+    await expect(page.getByText(organizationName)).toBeVisible();
     await expect(page.getByText("Role: owner")).toBeVisible();
 
     const organizationResult = await setupClient
       ?.from("organizations")
       .select("id")
-      .eq("name", "E2E Organization")
+      .eq("name", organizationName)
       .single();
     const organizationId = organizationResult?.data?.id;
     expect(organizationResult?.error).toBeNull();
@@ -98,7 +100,7 @@ test.describe("Supabase Auth browser flow", () => {
 
     const secondOrganizationResult = await setupClient
       ?.from("organizations")
-      .insert({ name: "E2E Organization Two", slug: `e2e-two-${randomUUID()}` })
+      .insert({ name: secondOrganizationName, slug: `e2e-two-${randomUUID()}` })
       .select("id")
       .single();
     expect(secondOrganizationResult?.error).toBeNull();
@@ -121,7 +123,7 @@ test.describe("Supabase Auth browser flow", () => {
     await page.getByLabel("Switch organization").selectOption(secondOrganizationId);
     await page.getByRole("button", { name: "Switch organization" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
-    await expect(page.getByRole("heading", { name: "E2E Organization Two" })).toBeVisible();
+    await expect(page.getByText(`Current organization: ${secondOrganizationName} (member)`)).toBeVisible();
     await expect(page.getByText("Role: member")).toBeVisible();
 
     await page.getByRole("button", { name: "Log out" }).click();

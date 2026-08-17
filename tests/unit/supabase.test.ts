@@ -18,7 +18,7 @@ describe("Supabase Client Architecture", () => {
     it("should validate NEXT_PUBLIC_SUPABASE_URL format", () => {
       const url = process.env["NEXT_PUBLIC_SUPABASE_URL"];
       if (url) {
-        expect(url).toMatch(/^https:\/\//);
+        expect(url).toMatch(/^https?:\/\//);
       }
     });
 

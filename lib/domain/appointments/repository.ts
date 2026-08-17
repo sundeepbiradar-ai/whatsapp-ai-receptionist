@@ -40,7 +40,14 @@ export async function updateAppointment(appointmentId: string, input: Appointmen
   const values = parseDomain(appointmentUpdateSchema, input);
   const validAppointmentId = parseDomain(idSchema, appointmentId);
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase.from('appointments').update({ contact_id: values.contactId, conversation_id: values.conversationId, status: values.status, starts_at: values.startsAt, ends_at: values.endsAt, notes: values.notes }).eq('organization_id', context.currentOrganization.id).eq('id', validAppointmentId).select('id, organization_id, contact_id, conversation_id, status, starts_at, ends_at, notes, created_at, updated_at').maybeSingle();
+  const updates: Database['public']['Tables']['appointments']['Update'] = {};
+  if (values.contactId !== undefined) updates.contact_id = values.contactId;
+  if (values.conversationId !== undefined) updates.conversation_id = values.conversationId;
+  if (values.status !== undefined) updates.status = values.status;
+  if (values.startsAt !== undefined) updates.starts_at = values.startsAt;
+  if (values.endsAt !== undefined) updates.ends_at = values.endsAt;
+  if (values.notes !== undefined) updates.notes = values.notes;
+  const { data, error } = await supabase.from('appointments').update(updates).eq('organization_id', context.currentOrganization.id).eq('id', validAppointmentId).select('id, organization_id, contact_id, conversation_id, status, starts_at, ends_at, notes, created_at, updated_at').maybeSingle();
   if (error) throw mapDomainDatabaseError(error);
   if (!data) throw new DomainError('not_found', 'Appointment not found.');
   return data;

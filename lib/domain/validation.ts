@@ -46,6 +46,10 @@ export const appointmentCreateSchema = appointmentFields.refine(
   { message: 'Appointment end must be later than its start.', path: ['endsAt'] }
 );
 
+export const appointmentStatusSchema = z.object({
+  status: z.enum(['pending', 'confirmed', 'cancelled', 'completed']),
+});
+
 export const appointmentUpdateSchema = appointmentFields.partial().refine(
   (value) => Object.keys(value).length > 0,
   'At least one appointment field is required.'
@@ -61,6 +65,7 @@ export type ConversationCreateInput = z.infer<typeof conversationCreateSchema>;
 export type ConversationStatusInput = z.infer<typeof conversationStatusSchema>;
 export type MessageCreateInput = z.infer<typeof messageCreateSchema>;
 export type AppointmentCreateInput = z.infer<typeof appointmentCreateSchema>;
+export type AppointmentStatusInput = z.infer<typeof appointmentStatusSchema>;
 export type AppointmentUpdateInput = z.infer<typeof appointmentUpdateSchema>;
 
 export function parseDomain<T>(schema: z.ZodType<T>, input: unknown): T {

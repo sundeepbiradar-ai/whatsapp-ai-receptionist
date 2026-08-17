@@ -10,6 +10,7 @@ import {
 } from "@/lib/domain/appointments/repository";
 import {
   appointmentCreateSchema,
+  appointmentStatusSchema,
   appointmentUpdateSchema,
   idSchema,
   parseDomain,
@@ -63,6 +64,11 @@ export async function createAppointmentAction(
   } catch (error) {
     return { error: errorMessage(error) };
   }
+
+  if (!appointmentId) {
+    return { error: "We could not complete that appointment operation. Please try again." };
+  }
+
   redirect(`/dashboard/appointments/${appointmentId}`);
 }
 
@@ -81,6 +87,7 @@ export async function updateAppointmentAction(
   } catch (error) {
     return { error: errorMessage(error) };
   }
+
   redirect(`/dashboard/appointments/${appointmentId}`);
 }
 
@@ -91,7 +98,7 @@ export async function updateAppointmentStatusAction(
 ): Promise<AppointmentActionState> {
   try {
     const validId = parseDomain(idSchema, appointmentId);
-    const status = parseDomain(appointmentUpdateSchema.pick({ status: true }), {
+    const status = parseDomain(appointmentStatusSchema, {
       status: formData.get("status"),
     });
     await updateAppointment(validId, status);
@@ -101,5 +108,6 @@ export async function updateAppointmentStatusAction(
   } catch (error) {
     return { error: errorMessage(error) };
   }
+
   redirect(`/dashboard/appointments/${appointmentId}`);
 }

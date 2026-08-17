@@ -190,6 +190,50 @@ integrationDescribe("Phase 3.2 runtime domain security", () => {
     expect(invalidTime.error).not.toBeNull();
   });
 
+  it("keeps appointment reads and mutations tenant-scoped", async () => {
+    const appointmentA = await userAClient.from("appointments").insert({
+      organization_id: fixture.organizationAId,
+      contact_id: fixture.contactAId,
+      conversation_id: fixture.conversationAId,
+      starts_at: "2026-02-01T10:00:00Z",
+      ends_at: "2026-02-01T11:00:00Z",
+      status: "pending",
+      notes: "Tenant-safe appointment",
+    }).select("id").single();
+
+    const otherOrg = await admin.from("appointments").insert({
+      organization_id: fixture.organizationBId,
+      contact_id: fixture.contactBId,
+      conversation_id: fixture.conversationBId,
+      starts_at: "2026-02-02T10:00:00Z",
+      ends_at: "2026-02-02T11:00:00Z",
+      status: "confirmed",
+      notes: "Other tenant appointment",
+    }).select("id").single();
+
+    expect(appointmentA.error).toBeNull();
+    expect(otherOrg.error).toBeNull();
+    expect(appointmentA.data).not.toBeNull();
+    expect(otherOrg.data).not.toBeNull();
+
+    const ownRead = await userAClient.from("appointments").select("id").eq("id", appointmentA.data!.id);
+    const crossRead = await userAClient.from("appointments").select("id").eq("id", otherOrg.data!.id);
+    const statusUpdate = await userAClient.from("appointments").update({ status: "confirmed" }).eq("id", appointmentA.data!.id).select("status").single();
+    const crossUpdate = await userAClient.from("appointments").update({ status: "cancelled" }).eq("id", otherOrg.data!.id).select("status");
+
+    expect(ownRead.error).toBeNull();
+    expect(ownRead.data).toHaveLength(1);
+    expect(crossRead.error).toBeNull();
+    expect(crossRead.data).toHaveLength(0);
+    expect(statusUpdate.error).toBeNull();
+    expect(statusUpdate.data?.status).toBe("confirmed");
+    expect(crossUpdate.error).toBeNull();
+    expect(crossUpdate.data).toHaveLength(0);
+
+    await admin.from("appointments").delete().eq("id", otherOrg.data!.id);
+    await admin.from("appointments").delete().eq("id", appointmentA.data!.id);
+  });
+
   it("allows members to read own conversations and messages only", async () => {
     const ownConversation = await userAClient.from("conversations").select("id").eq("id", fixture.conversationAId);
     const otherConversation = await userAClient.from("conversations").select("id").eq("id", fixture.conversationBId);

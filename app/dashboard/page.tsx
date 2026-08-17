@@ -8,6 +8,7 @@ import { listContacts, listRecentContacts } from '@/lib/domain/contacts/reposito
 import { listConversations } from '@/lib/domain/conversations/repository';
 import { listAppointments } from '@/lib/domain/appointments/repository';
 import { getRecentConversations, getUpcomingAppointments } from '@/lib/dashboard/overview';
+import { OrganizationSwitcher } from '@/components/organizations/organization-switcher';
 import type { Database } from '@/lib/supabase/database';
 
 export const metadata: Metadata = {
@@ -85,6 +86,10 @@ export default async function DashboardPage(): Promise<React.ReactElement> {
             <p className="mt-2 text-sm text-gray-500">
               Current organization: {organizationContext.currentOrganization.name} ({organizationContext.currentRole})
             </p>
+            <p className="mt-1 text-sm text-gray-500">
+              Role: {organizationContext.currentRole}
+            </p>
+            <OrganizationSwitcher context={organizationContext} />
           </div>
           <form action={logoutAction}>
             <button className="button-secondary whitespace-nowrap" type="submit">Log out</button>

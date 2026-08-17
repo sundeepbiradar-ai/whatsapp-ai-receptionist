@@ -11,6 +11,7 @@ const serviceRoleKey = process.env["E2E_SUPABASE_SERVICE_ROLE_KEY"];
 const hasEnvironment = Boolean(url && anonKey && serviceRoleKey);
 const email = `contacts-${randomUUID()}@example.com`;
 const password = `Contacts-${randomUUID()}-A9!`;
+const organizationName = `Contacts E2E Organization ${randomUUID()}`;
 let admin: SupabaseClient<Database> | undefined;
 let userId: string | undefined;
 let organizationId: string | undefined;
@@ -49,14 +50,14 @@ test.describe("Contacts UI", () => {
 
     await expect(page).toHaveURL(/\/dashboard$/);
     await page.goto("/onboarding");
-    await page.getByLabel("Organization name").fill("Contacts E2E Organization");
+    await page.getByLabel("Organization name").fill(organizationName);
     await page.getByRole("button", { name: "Create organization" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
 
     const users = await admin?.auth.admin.listUsers({ page: 1, perPage: 100 });
     userId = users?.data.users.find((user) => user.email === email)?.id;
     expect(userId).toBeDefined();
-    const organization = await admin?.from("organizations").select("id").eq("name", "Contacts E2E Organization").single();
+    const organization = await admin?.from("organizations").select("id").eq("name", organizationName).single();
     organizationId = organization?.data?.id;
     expect(organization?.error).toBeNull();
 
