@@ -23,6 +23,9 @@ pnpm-lock.yaml
 .env.test.local
 .env.production.local
 
+# Supabase CLI local link state
+supabase/.temp/
+
 # IDE
 .vscode/
 .idea/
