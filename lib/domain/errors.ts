@@ -47,6 +47,12 @@ export type DomainErrorCode =
   | 'whatsapp_status_persistence_failed'
   | 'whatsapp_message_unconfirmed'
   | 'whatsapp_retry_worker_failed'
+  | 'ai_configuration_invalid'
+  | 'ai_provider_unauthorized'
+  | 'ai_provider_rate_limited'
+  | 'ai_provider_timeout'
+  | 'ai_provider_unavailable'
+  | 'ai_provider_response_invalid'
   | 'database_error';
 
 export class DomainError extends Error {

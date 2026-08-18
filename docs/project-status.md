@@ -7,13 +7,14 @@ blockers, and the rule for moving to the next step.
 
 | Item                     | Status                                              |
 | ------------------------ | --------------------------------------------------- |
-| Current phase            | Phase 5.3 - WhatsApp Reliability                    |
-| Current step             | Reliability complete; deployment verification next  |
-| Completed phases         | 4 of 9                                              |
-| Overall phase completion | 44.4%                                               |
+| Current phase            | Phase 6.4 - Tool Calling                            |
+| Current step             | Phase 6 AI receptionist core complete               |
+| Completed phases         | 5 of 9                                              |
+| Overall phase completion | 55.6%                                               |
 | Phase 4 completion       | 100% (10 of 10 steps)                               |
 | Phase 5 completion       | Implementation 100%; deployment verification open   |
-| Latest validation        | 203 unit, 75 integration, typecheck/lint/build pass |
+| Phase 6 completion       | Core complete (6.1, 6.2, 6.3, 6.4)                  |
+| Latest validation        | 438 unit, 96 integration, typecheck/lint/build pass |
 | Active blockers          | None; deployment verification pending               |
 
 ## Advancement Gate
@@ -269,16 +270,160 @@ Deployment verification still pending:
 
 ## Phase 6 - AI Receptionist
 
-**Status: Not started - Phase 5 implementation is complete, so this phase is
-unblocked once deployment verification is scheduled**
+**Status: PHASE 6 AI RECEPTIONIST CORE COMPLETE - 6.1, 6.2, 6.3 and 6.4 complete**
 
-| Step                                                   | Status      | Validation | Blocker                      |
-| ------------------------------------------------------ | ----------- | ---------- | ---------------------------- |
-| Intent detection                                       | Not started | Not run    | None; awaiting phase kickoff |
-| Conversation state and required information collection | Not started | Not run    | None; awaiting phase kickoff |
-| Natural scheduling conversation                        | Not started | Not run    | None; awaiting phase kickoff |
-| Appointment-engine tool calling                        | Not started | Not run    | None; awaiting phase kickoff |
-| Real availability and business-function responses      | Not started | Not run    | None; awaiting phase kickoff |
+| Step                                              | Status      | Validation               | Blocker                      |
+| ------------------------------------------------- | ----------- | ------------------------ | ---------------------------- |
+| 6.1 Intent detection                              | Complete    | 438 unit, 96 integration | None                         |
+| 6.2 Conversation state and required information   | Complete    | 438 unit, 96 integration | None                         |
+| 6.3 Natural scheduling conversation               | Complete    | 438 unit, 96 integration | None                         |
+| 6.4 Appointment-engine tool calling               | Complete    | 438 unit, 96 integration | None                         |
+| Real availability and business-function responses | Not started | Not run                  | None; awaiting phase kickoff |
+
+### Phase 6.1 Intent Detection
+
+**Status: PHASE 6.1 INTENT DETECTION COMPLETE**
+
+- Fixed seven-value taxonomy: `book_appointment`, `reschedule_appointment`,
+  `cancel_appointment`, `query_appointment`, `general_question`, `greeting`,
+  `unknown`. No other intent can be represented.
+- Result contract is `{ intent, requiresClarification, reason }`. There is no
+  numeric confidence score, because a model-reported probability would not be
+  calibrated. `requiresClarification` is set by deterministic application rules:
+  empty input, low-signal input, over-length input, schema mismatch, malformed
+  output, any provider failure, or a model-reported `unknown`.
+- Minimal server-only provider boundary in `lib/ai/provider.ts` reads
+  `OPENAI_API_KEY` at request time, sends the key only as an authorization
+  header, and is never reachable from browser code. Tests never need real
+  credentials.
+- Model output is parsed and validated with a strict Zod schema. Unsupported
+  intent strings, malformed JSON, wrong shapes, and smuggled extra keys all
+  degrade to `unknown` with `requiresClarification: true`. Raw model JSON is
+  never trusted.
+- The system prompt classifies only, treats the customer message as untrusted
+  data inside a delimited block, refuses instruction override, forbids tool use,
+  and forbids disclosing system instructions. No credentials, Vault contents, or
+  unrelated customer data are sent to the model.
+- Provider failures map to stable internal reasons: timeout, rate limit,
+  unavailable, unauthorized, configuration invalid, malformed output. No API
+  key, raw provider error, prompt, or stack trace is exposed.
+- Classification is side-effect free. `lib/ai/*` imports no Supabase client and
+  no appointment, message, conversation, contact, or WhatsApp module, and tests
+  assert that import boundary. The webhook route was not modified.
+
+Not started in Phase 6.1, by design: conversation state (6.2), scheduling
+conversation (6.3), and appointment tool calling (6.4). No automatic replies and
+no appointment mutations exist anywhere in the AI path.
+
+### Phase 6.2 Conversation State
+
+**Status: PHASE 6.2 CONVERSATION STATE COMPLETE**
+
+- `buildConversationState({ conversationId })` is the single authoritative
+  boundary. It takes **no** `organizationId`: the organization comes from
+  `requireDomainOrganization()`, so a caller cannot assert ownership. Both
+  queries are organization-scoped and run under the caller's RLS session; no
+  service role is used.
+- State is derived, never persisted: organization, conversation, contact,
+  conversation status, `isConversationOpen`, `hasRecentInboundMessage`, latest
+  inbound message id/text, detected intent, `requiresClarification`,
+  `intentReason`, and the bounded recent message window.
+- History is bounded to the newest 20 messages, fetched newest-first with an
+  explicit limit and reversed to chronological order. Ordering is deterministic
+  on `created_at` then `id`, so it never depends on client behavior.
+- The latest **inbound** message is selected for classification even when newer
+  outbound messages exist. Outbound messages are never classified as customer
+  intent. A conversation with no inbound message yields `unknown` with reason
+  `no_inbound_message` and does not call the model.
+- Phase 6.1 is reused unchanged: no prompt, provider, or taxonomy was
+  duplicated or modified. Intent detection remains text-based on the latest
+  inbound message; conversation history is exposed in state but does not feed
+  the classifier. Context-aware classification would be a separate design
+  decision and was not made here.
+- `requiresClarification` is surfaced for Phase 6.3 to act on. No clarification
+  text, reply, or slot-filling dialogue is generated in 6.2.
+- Read-only: the module performs no insert, update, upsert, delete, or RPC, and
+  imports no appointment or WhatsApp module. Tests assert both the import graph
+  and that record counts and conversation status are unchanged after a build.
+- Not wired into the webhook. Phase 6.3 decides how state is consumed.
+
+### Phase 6.3 Scheduling Conversation
+
+**Status: PHASE 6.3 SCHEDULING CONVERSATION COMPLETE**
+
+- `planSchedulingConversation(state)` derives the next dialogue step from a
+  trusted `ConversationState`. It prepares; it never acts.
+- Contract: `{ intent, action, requiresClarification, missingFields,
+collectedFields, nextStep, reason }`. Actions are `prepare_booking`,
+  `prepare_reschedule`, `prepare_cancellation`, `prepare_query`,
+  `no_scheduling_action`. Next steps are `ask_for_date`, `ask_for_time`,
+  `ask_for_appointment_reference`, `ask_for_clarification`, `ready_for_tool`,
+  `no_action`.
+- Required fields were derived from the real Phase 4 contracts: booking needs
+  date and time (contact comes from the conversation, `endsAt` from
+  `default_duration_minutes`); reschedule needs a reference plus new date and
+  time; cancellation needs only a reference; queries need nothing, because
+  `queryAppointments` has no required options. Staff, service and resource
+  selection were not invented, because the appointment engine has none.
+- Slot extraction returns only local `date`, `time` and a boolean. The schema
+  has no identifier field, so an appointment id cannot be hallucinated; strict
+  parsing rejects any extra key. Vague language such as "morning" yields null
+  and asks rather than guessing.
+- Context resolution is deterministic, not model-driven: a clock-reference scan
+  over the recent window resolves "change it" or "cancel that one" only when
+  exactly one distinct referent exists. Zero referents ask for a reference;
+  several require clarification. Phase 6.1 was not modified.
+- Timezone comes from `organization_scheduling_settings` through the existing
+  organization-scoped `getSchedulingSettings()` reader; the server timezone is
+  never used. Instants are produced by the Phase 4.8 `localDateTimeToUtc`, so
+  nonexistent and ambiguous DST local times become clarification requests
+  instead of silent guesses.
+- The single existing AI provider boundary is reused; no second client was
+  added. Extraction failures degrade to no collected fields.
+- Read-only: no insert, update, upsert, delete or RPC, and no import of any
+  booking, reschedule, cancel, query or WhatsApp send symbol. Integration
+  asserts zero appointments exist after preparing a booking.
+- Not wired into the webhook. Phase 6.4 decides how the plan is executed.
+
+### Phase 6.4 Tool Calling
+
+**Status: PHASE 6.4 TOOL CALLING COMPLETE — PHASE 6 AI RECEPTIONIST CORE COMPLETE**
+
+- Exactly four tools exist: `book_appointment`, `reschedule_appointment`,
+  `cancel_appointment`, `query_appointments`. No repository method, SQL, RPC,
+  configuration, contact or conversation mutation is exposed.
+- Tool selection is deterministic from the validated Phase 6.3 plan. The model
+  is not involved in execution at all: the tool module imports no provider and
+  cannot call one. Nothing executes unless `requiresClarification` is false,
+  `nextStep` is `ready_for_tool`, and the action maps to a tool.
+- Argument schemas are strict Zod objects. `organizationId`, `contactId`,
+  `conversationId`, provider credentials and status values are not accepted
+  from any caller; they are derived server-side. The organization always comes
+  from the session through `requireDomainOrganization()`.
+- Ownership is re-verified against live data before any mutation: the
+  conversation is reloaded through the organization-scoped repository and the
+  contact must still match, so stale context cannot act.
+- Appointment references resolve deterministically from pending and confirmed
+  appointments belonging to the trusted contact, matched on organization-local
+  date and time. Zero matches return `not_found`, several return `ambiguous`,
+  and neither executes anything. No identifier is ever supplied by a model.
+- All four tools delegate to the authoritative Phase 4 operations, so
+  availability, business hours, blocked periods, conflict detection, timezone
+  handling, terminal-state rules and concurrency are reused rather than
+  reimplemented. Cancellation uses the dedicated `cancelAppointment` boundary,
+  never a generic update.
+- Results use one discriminated contract of `success`, `not_executed`,
+  `not_found`, `ambiguous`, `rejected` and `failed`. Only an allowlist of safe
+  domain codes is surfaced; anything else collapses to `failed`/`unavailable`,
+  so database, SQL and infrastructure detail cannot leak. Query output is
+  bounded and mapped, never raw rows.
+- A tool failure never triggers another tool.
+- No response generation and no webhook wiring: the pipeline stops at a
+  structured tool result.
+
+Deployment verification still pending for Phase 6: live OpenAI classification
+and live Meta end-to-end delivery, both recorded as deployment verification
+rather than implementation gaps.
 
 ## Phase 7 - Business Configuration
 
@@ -335,6 +480,10 @@ counts together so a future status update can be audited.
 | 2026-08-18 | Phase 5.2 conversation pipeline |           163 passed |    45 passed |  Not run | Passed    | Passed, 24 warnings | Passed       | Pipeline complete                    |
 | 2026-08-18 | Phase 5.3 WhatsApp reliability  |           157 passed |    58 passed |  Not run | Passed    | Passed, 38 warnings | Passed       | Partially complete - retry blocked   |
 | 2026-08-18 | Phase 5.3 durable retry         |           203 passed |    75 passed |  Not run | Passed    | Passed, 50 warnings | Passed       | Complete - deployment pending        |
+| 2026-08-18 | Phase 6.1 intent detection      |           286 passed |    75 passed |  Not run | Passed    | Passed, 50 warnings | Passed       | Complete                             |
+| 2026-08-18 | Phase 6.2 conversation state    |           323 passed |    83 passed |  Not run | Passed    | Passed, 59 warnings | Passed       | Complete                             |
+| 2026-08-18 | Phase 6.3 scheduling dialogue   |           385 passed |    87 passed |  Not run | Passed    | Passed, 63 warnings | Passed       | Complete                             |
+| 2026-08-18 | Phase 6.4 tool calling          |           438 passed |    96 passed |  Not run | Passed    | Passed, 73 warnings | Passed       | Phase 6 core complete                |
 
 Recommended commands:
 
