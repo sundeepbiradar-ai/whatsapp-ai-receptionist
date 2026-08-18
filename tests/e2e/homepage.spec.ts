@@ -45,6 +45,14 @@ test.describe("Homepage", () => {
     // Unauthenticated users must be sent to login
     await expect(page).toHaveURL("/login");
   });
+
+  test("should navigate Get Started to signup", async ({ page }) => {
+    await page.goto("/");
+
+    await page.getByRole("link", { name: "Get Started" }).click();
+
+    await expect(page).toHaveURL("/signup");
+  });
 });
 
 test.describe("Authentication", () => {

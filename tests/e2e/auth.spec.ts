@@ -72,8 +72,7 @@ test.describe("Supabase Auth browser flow", () => {
     await page.getByLabel("Email address").fill(testEmail);
     await page.getByLabel("Password").fill(testPassword);
     await page.getByRole("button", { name: "Log in" }).click();
-    await expect(page).toHaveURL(/\/dashboard$/);
-    await expect(page.getByText("You don't belong to an organization yet.")).toBeVisible();
+    await expect(page).toHaveURL(/\/onboarding$/);
 
     const userResult = await setupClient?.auth.admin.listUsers({ page: 1, perPage: 100 });
     userId = userResult?.data.users.find((user) => user.email === testEmail)?.id;

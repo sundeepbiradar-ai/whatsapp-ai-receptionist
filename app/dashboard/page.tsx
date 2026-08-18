@@ -38,26 +38,7 @@ export default async function DashboardPage(): Promise<React.ReactElement> {
   }
 
   if (organizationContext.status === 'no-organization') {
-    return (
-      <main className="min-h-screen bg-gray-50">
-        <div className="container mx-auto px-4 py-12 sm:px-6 lg:px-8">
-          <div className="flex items-start justify-between gap-6">
-            <div>
-              <h1 className="text-4xl font-bold text-gray-900">Dashboard</h1>
-              <p className="mt-2 text-gray-600">Welcome back, {organizationContext.user.email ?? 'authenticated user'}.</p>
-            </div>
-            <form action={logoutAction}>
-              <button className="button-secondary whitespace-nowrap" type="submit">Log out</button>
-            </form>
-          </div>
-          <section className="mt-8 max-w-2xl rounded-lg border border-amber-200 bg-amber-50 p-6">
-            <h2 className="text-xl font-semibold text-amber-950">No organization yet</h2>
-            <p className="mt-2 text-amber-900">You don&apos;t belong to an organization yet.</p>
-            <Link className="button-primary mt-5" href="/onboarding">Create your organization</Link>
-          </section>
-        </div>
-      </main>
-    );
+    redirect('/onboarding');
   }
 
   const [allContactsResult, recentContactsResult, conversationsResult, appointmentsResult] = await Promise.allSettled([

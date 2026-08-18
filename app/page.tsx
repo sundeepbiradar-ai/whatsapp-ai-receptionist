@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
+import Link from "next/link";
 
 export default function Home(): React.ReactElement {
   return (
@@ -48,13 +49,13 @@ export default function Home(): React.ReactElement {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4">
-            <button className="button-primary">
+            <Link className="button-primary" href="/signup">
               Get Started
               <ChevronRight className="ml-2 w-5 h-5" />
-            </button>
-            <a href="/dashboard" className="button-secondary">
+            </Link>
+            <Link href="/dashboard" className="button-secondary">
               View Dashboard
-            </a>
+            </Link>
           </div>
         </div>
       </section>
