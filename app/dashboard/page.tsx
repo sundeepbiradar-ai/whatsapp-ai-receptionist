@@ -9,6 +9,7 @@ import { listConversations } from '@/lib/domain/conversations/repository';
 import { listAppointments } from '@/lib/domain/appointments/repository';
 import { getRecentConversations, getUpcomingAppointments } from '@/lib/dashboard/overview';
 import { OrganizationSwitcher } from '@/components/organizations/organization-switcher';
+import { DashboardNav } from '@/components/layout/dashboard-nav';
 import type { Database } from '@/lib/supabase/database';
 
 export const metadata: Metadata = {
@@ -77,12 +78,7 @@ export default async function DashboardPage(): Promise<React.ReactElement> {
           </form>
         </div>
 
-        <nav aria-label="Dashboard sections" className="mt-8 flex flex-wrap gap-3">
-          <Link className="button-secondary" href="/dashboard">Dashboard</Link>
-          <Link className="button-secondary" href="/dashboard/contacts">Contacts</Link>
-          <Link className="button-secondary" href="/dashboard/conversations">Conversations</Link>
-          <Link className="button-secondary" href="/dashboard/appointments">Appointments</Link>
-        </nav>
+        <DashboardNav />
 
         {hasRepositoryError && (
           <p className="mt-6 rounded-md bg-red-50 p-3 text-sm text-red-700" role="alert">

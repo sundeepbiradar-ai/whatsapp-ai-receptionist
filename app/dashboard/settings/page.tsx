@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { schedulingWeekdays } from "@/lib/domain/appointments/scheduling";
 import {
   createBlockedPeriodAction,
@@ -21,7 +23,10 @@ export default async function SettingsPage() {
   return (
     <main className="mx-auto max-w-3xl space-y-10 p-6">
       <header>
-        <h1 className="text-2xl font-semibold">Business settings</h1>
+        <Link className="text-sm font-medium text-primary-700 hover:text-primary-800" href="/dashboard">
+          Back to dashboard
+        </Link>
+        <h1 className="mt-2 text-2xl font-semibold">Business settings</h1>
         <p className="text-sm text-slate-600">
           {readOnly
             ? "You have read-only access. Only owners and admins can change configuration."
