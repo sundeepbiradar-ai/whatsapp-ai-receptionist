@@ -7,15 +7,16 @@ blockers, and the rule for moving to the next step.
 
 | Item                     | Status                                               |
 | ------------------------ | ---------------------------------------------------- |
-| Current phase            | Phase 7 - Business Configuration                     |
-| Current step             | Business configuration complete; Phase 8 not started |
-| Completed phases         | 6 of 9                                               |
-| Overall phase completion | 66.7%                                                |
+| Current phase            | Phase 8 - Production Hardening                       |
+| Current step             | Hardening complete; live verification pending        |
+| Completed phases         | 7 of 9                                               |
+| Overall phase completion | 77.8%                                                |
 | Phase 4 completion       | 100% (10 of 10 steps)                                |
 | Phase 5 completion       | Implementation 100%; deployment verification open    |
 | Phase 6 completion       | Core complete (6.1, 6.2, 6.3, 6.4)                   |
 | Phase 7 completion       | 100%                                                 |
-| Latest validation        | 466 unit, 110 integration, typecheck/lint/build pass |
+| Phase 8 completion       | 100%; live deployment verification pending           |
+| Latest validation        | 480 unit, 137 integration, typecheck/lint/build pass |
 | Active blockers          | None; deployment verification pending                |
 
 ## Advancement Gate
@@ -473,15 +474,45 @@ rather than implementation gaps.
 
 ## Phase 8 - Production Hardening
 
-**Status: Planned - blocked until Phase 7 is complete**
+**Status: PHASE 8 PRODUCTION HARDENING COMPLETE - LIVE DEPLOYMENT VERIFICATION PENDING**
 
-| Step                                                 | Status  | Validation | Blocker            |
-| ---------------------------------------------------- | ------- | ---------- | ------------------ |
-| RLS and authorization audit                          | Planned | Not run    | Phase 7 incomplete |
-| Webhook, security, and secrets audit                 | Planned | Not run    | Phase 7 incomplete |
-| Retries, logging, monitoring, and idempotency        | Planned | Not run    | Phase 7 incomplete |
-| Full unit, integration, E2E, and AI workflow testing | Planned | Not run    | Phase 7 incomplete |
-| Production-like validation and deployment pipeline   | Planned | Not run    | Phase 7 incomplete |
+| Step                                                | Status   | Validation                | Blocker                    |
+| --------------------------------------------------- | -------- | ------------------------- | -------------------------- |
+| 8.1 Security: RLS, definer, secrets, headers        | Complete | 480 unit, 137 integration | CSP and rate limiting open |
+| 8.2 Reliability: retries, timeouts, failure classes | Complete | 480 unit, 137 integration | None                       |
+| 8.3 Testing: security and reliability gap coverage  | Complete | 480 unit, 137 integration | None                       |
+| 8.4 Deployment: env contract, CI, runbook, health   | Complete | 480 unit, 137 integration | Live verification pending  |
+
+See `production-readiness.md` for the environment contract, Supabase checklist,
+deployment runbook and the live-verification list.
+
+- RLS is enabled on all 13 public tables. `organization_whatsapp_secret_refs`
+  and `whatsapp_send_jobs` intentionally have zero policies and are unreachable
+  by `anon`/`authenticated`.
+- All 16 `SECURITY DEFINER` functions carry a fixed `search_path` and have no
+  `PUBLIC` execute grant. Every Vault-reading function is `service_role` only.
+- All service-role and provider keys are confined to `server-only` modules. No
+  secret is referenced by any client component or `NEXT_PUBLIC` variable.
+- Security headers added in `next.config.ts`; `poweredByHeader` disabled.
+- Environment contract centralised in `lib/config/environment.ts` with a
+  dependency-free `npm run verify:env` deploy gate that prints names only.
+- `NEXT_PUBLIC_SITE_URL` was read by auth redirects but undocumented; it is now
+  a required, documented variable. Without it production auth callbacks would
+  have silently fallen back to localhost.
+- CI now runs a second job that starts local Supabase, applies migrations from
+  scratch and runs the integration and RLS suites, so security-critical tests
+  are no longer skipped in CI.
+- `GET /api/health` reports application liveness only; it makes no database or
+  provider call.
+
+Open deployment decisions, not implementation defects:
+
+- **CSP** is deliberately unset. Next.js needs a per-request nonce for its
+  inline bootstrap scripts and the mechanism depends on the hosting platform.
+- **Rate limiting** is deliberately not implemented in-process. In-memory
+  limiting is unreliable across instances; the webhook is protected by HMAC and
+  the retry endpoint by a timing-safe bearer secret. A durable limiter belongs
+  at the deployment edge.
 
 ## Phase 9 - Production Launch
 
@@ -519,6 +550,7 @@ counts together so a future status update can be audited.
 | 2026-08-18 | Phase 6.3 scheduling dialogue   |           385 passed |    87 passed |  Not run | Passed    | Passed, 63 warnings | Passed       | Complete                             |
 | 2026-08-18 | Phase 6.4 tool calling          |           438 passed |    96 passed |  Not run | Passed    | Passed, 73 warnings | Passed       | Phase 6 core complete                |
 | 2026-08-18 | Phase 7 business configuration  |           466 passed |   110 passed |  Not run | Passed    | Passed, 79 warnings | Passed       | Complete                             |
+| 2026-08-18 | Phase 8 production hardening    |           480 passed |   137 passed |  Not run | Passed    | Passed, 81 warnings | Passed       | Complete - live verification pending |
 
 Recommended commands:
 
