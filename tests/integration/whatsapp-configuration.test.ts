@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/supabase/database";
+import { parseSupabaseQueryOutput } from "../helpers/supabase-cli-output";
 
 vi.mock("server-only", () => ({}));
 
@@ -44,9 +45,7 @@ function localSql(sql: string): QueryOutput {
       encoding: "utf8",
     }
   );
-  const jsonStart = output.indexOf("{");
-  if (jsonStart < 0) return {};
-  return JSON.parse(output.slice(jsonStart)) as QueryOutput;
+  return parseSupabaseQueryOutput(output);
 }
 
 function createVaultSecret(value: string, name: string): string {

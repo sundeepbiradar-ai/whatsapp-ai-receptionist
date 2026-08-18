@@ -58,7 +58,7 @@ jobs:
       - name: Start local Supabase
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.114.0
 
       - name: Apply migrations from scratch
         run: supabase start && supabase db reset --local
