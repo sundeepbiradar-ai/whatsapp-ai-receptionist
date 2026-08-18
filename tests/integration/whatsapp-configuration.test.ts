@@ -1,20 +1,18 @@
 /* @vitest-environment node */
 
-import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/supabase/database";
-import { parseSupabaseQueryOutput } from "../helpers/supabase-cli-output";
+import { createTestVaultSecret, deleteTestVaultSecrets } from "../helpers/test-database";
 
 vi.mock("server-only", () => ({}));
 
 const provider = "meta_whatsapp_cloud" as const;
 type Config = { url: string; anonKey: string; serviceRoleKey: string };
 type User = { id: string; email: string; password: string };
-type QueryOutput = { rows?: Array<Record<string, unknown>> };
 
 function loadConfig(): Config | null {
   const url = process.env["SUPABASE_TEST_URL"];
@@ -30,31 +28,6 @@ function client(key: string): SupabaseClient<Database> {
   return createClient<Database>(config!.url, key, {
     auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
   });
-}
-
-function sqlString(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
-}
-
-function localSql(sql: string): QueryOutput {
-  const output = execFileSync(
-    "supabase",
-    ["db", "query", "--local", "--output-format", "json", sql],
-    {
-      cwd: process.cwd(),
-      encoding: "utf8",
-    }
-  );
-  return parseSupabaseQueryOutput(output);
-}
-
-function createVaultSecret(value: string, name: string): string {
-  const result = localSql(
-    `select vault.create_secret(${sqlString(value)}, ${sqlString(name)}, ${sqlString("Phase 5.1 test secret")}, null) as id;`
-  );
-  const id = result.rows?.[0]?.["id"];
-  if (typeof id !== "string") throw new Error("Vault secret was not created.");
-  return id;
 }
 
 async function createUser(
@@ -144,9 +117,7 @@ integrationDescribe("Phase 5.1 WhatsApp configuration foundation", () => {
   });
 
   afterAll(async () => {
-    if (secretIds.length > 0) {
-      localSql(`delete from vault.secrets where id in (${secretIds.map(sqlString).join(", ")});`);
-    }
+    await deleteTestVaultSecrets(secretIds);
     if (organizationIds.length > 0)
       await admin.from("organizations").delete().in("id", organizationIds);
     for (const userId of userIds) await admin.auth.admin.deleteUser(userId);
@@ -347,9 +318,9 @@ integrationDescribe("Phase 5.1 WhatsApp configuration foundation", () => {
     const accessToken = `fake-access-${randomUUID()}`;
     const appSecret = `fake-app-${randomUUID()}`;
     const verifyToken = `fake-verify-${randomUUID()}`;
-    const accessTokenId = createVaultSecret(accessToken, `phase51-access-${randomUUID()}`);
-    const appSecretId = createVaultSecret(appSecret, `phase51-app-${randomUUID()}`);
-    const verifyTokenId = createVaultSecret(verifyToken, `phase51-verify-${randomUUID()}`);
+    const accessTokenId = await createTestVaultSecret(accessToken, `phase51-access-${randomUUID()}`);
+    const appSecretId = await createTestVaultSecret(appSecret, `phase51-app-${randomUUID()}`);
+    const verifyTokenId = await createTestVaultSecret(verifyToken, `phase51-verify-${randomUUID()}`);
     secretIds.push(accessTokenId, appSecretId, verifyTokenId);
 
     const configRow = await admin

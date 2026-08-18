@@ -68,4 +68,5 @@ jobs:
           export SUPABASE_TEST_URL="$(supabase status -o json | jq -r .API_URL)"
           export SUPABASE_TEST_ANON_KEY="$(supabase status -o json | jq -r .ANON_KEY)"
           export SUPABASE_TEST_SERVICE_ROLE_KEY="$(supabase status -o json | jq -r .SERVICE_ROLE_KEY)"
+          export SUPABASE_TEST_DB_URL="$(supabase status -o json | jq -r .DB_URL)"
           npm run test:integration
