@@ -7,7 +7,8 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: CI,
   retries: CI ? 2 : 0,
-  workers: CI ? 1 : undefined,
+  // Single worker: local dev container has too little free memory for concurrent Chromium instances.
+  workers: 1,
   reporter: "html",
   use: {
     baseURL: "http://127.0.0.1:3000",

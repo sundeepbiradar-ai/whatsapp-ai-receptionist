@@ -8,10 +8,10 @@ import { assertWithinBusinessHours, intervalsConflict, parseSchedulingSettings }
 import {
   assertAppointmentStartInFuture,
   assertAppointmentContactConsistency,
-  assertAppointmentTimeRange,
   assertAppointmentUpdatePolicy,
   parseAppointmentCreate,
   parseAppointmentUpdate,
+  parseAppointmentTimestamp,
   parseSchedulingInterval,
   parseDomain,
   idSchema,
@@ -22,6 +22,21 @@ import {
 type Appointment = Database['public']['Tables']['appointments']['Row'];
 type SchedulingSettingsRow = Database['public']['Tables']['organization_scheduling_settings']['Row'];
 type BlockedPeriod = Database['public']['Tables']['organization_blocked_periods']['Row'];
+
+export type AppointmentQueryOptions = {
+  statuses?: Database['public']['Enums']['appointment_status'][];
+  startsAtFrom?: string;
+  startsAtTo?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export type AppointmentQueryPage = {
+  appointments: Appointment[];
+  page: number;
+  pageSize: number;
+  total: number;
+};
 
 type SchedulingRpcResult = { ok?: boolean; appointment_id?: string; error_code?: string };
 
@@ -186,11 +201,31 @@ async function assertAppointmentRelationships(
 }
 
 export async function listAppointments(): Promise<Appointment[]> {
+  const result = await queryAppointments();
+  return result.appointments;
+}
+
+export async function queryAppointments(options: AppointmentQueryOptions = {}): Promise<AppointmentQueryPage> {
   const context = await requireDomainOrganization();
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase.from('appointments').select('id, organization_id, contact_id, conversation_id, status, starts_at, ends_at, notes, created_at, updated_at').eq('organization_id', context.currentOrganization.id).order('starts_at', { ascending: true }).order('id', { ascending: true });
+  const page = options.page ?? 1;
+  const pageSize = options.pageSize ?? 50;
+  if (!Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+    throw new DomainError('invalid_input', 'Appointment pagination parameters are invalid.');
+  }
+  if (options.startsAtFrom !== undefined) parseAppointmentTimestamp(options.startsAtFrom);
+  if (options.startsAtTo !== undefined) parseAppointmentTimestamp(options.startsAtTo);
+  if (options.startsAtFrom && options.startsAtTo && new Date(options.startsAtTo).getTime() <= new Date(options.startsAtFrom).getTime()) {
+    throw new DomainError('invalid_input', 'Appointment date range is invalid.');
+  }
+  const query = supabase.from('appointments').select('id, organization_id, contact_id, conversation_id, status, starts_at, ends_at, notes, created_at, updated_at', { count: 'exact' }).eq('organization_id', context.currentOrganization.id);
+  if (options.statuses && options.statuses.length > 0) query.in('status', options.statuses);
+  if (options.startsAtFrom) query.gte('starts_at', options.startsAtFrom);
+  if (options.startsAtTo) query.lt('starts_at', options.startsAtTo);
+  const offset = (page - 1) * pageSize;
+  const { data, error, count } = await query.order('starts_at', { ascending: true }).order('id', { ascending: true }).range(offset, offset + pageSize - 1);
   if (error) throw mapDomainDatabaseError(error, 'appointment');
-  return data;
+  return { appointments: data, page, pageSize, total: count ?? data.length };
 }
 
 export async function getAppointment(appointmentId: string): Promise<Appointment> {
@@ -204,25 +239,22 @@ export async function getAppointment(appointmentId: string): Promise<Appointment
 }
 
 export async function createAppointment(input: AppointmentCreateInput): Promise<Appointment> {
-  const context = await requireDomainOrganization();
-  const values = parseAppointmentCreate(input);
-  assertAppointmentStartInFuture(values.startsAt);
-  assertAppointmentTimeRange(values.startsAt, values.endsAt);
-  const supabase = await createServerSupabaseClient();
-  await assertAppointmentRelationships(
-    supabase,
-    context.currentOrganization.id,
-    values.contactId,
-    values.conversationId
-  );
-  const { data, error } = await supabase.from('appointments').insert({ organization_id: context.currentOrganization.id, contact_id: values.contactId, conversation_id: values.conversationId ?? null, status: values.status, starts_at: values.startsAt, ends_at: values.endsAt, notes: values.notes ?? null }).select('id, organization_id, contact_id, conversation_id, status, starts_at, ends_at, notes, created_at, updated_at').single();
-  if (error) throw mapDomainDatabaseError(error, 'appointment');
-  return data;
+  return bookAppointment(input);
 }
 
-export async function updateAppointment(appointmentId: string, input: AppointmentUpdateInput): Promise<Appointment> {
+async function updateAppointmentRecord(
+  appointmentId: string,
+  input: AppointmentUpdateInput,
+  allowCancellation = false,
+): Promise<Appointment> {
   const context = await requireDomainOrganization();
   const values = parseAppointmentUpdate(input);
+  if (values.startsAt !== undefined || values.endsAt !== undefined) {
+    throw new DomainError('appointment_reschedule_required', 'Appointment time changes must use the rescheduling operation.');
+  }
+  if (values.status === 'cancelled' && !allowCancellation) {
+    throw new DomainError('appointment_cancellation_required', 'Appointment cancellation must use the cancellation operation.');
+  }
   const validAppointmentId = parseDomain(idSchema, appointmentId);
   const supabase = await createServerSupabaseClient();
   const { data: current, error: currentError } = await supabase
@@ -273,4 +305,13 @@ export async function updateAppointment(appointmentId: string, input: Appointmen
   if (error) throw mapDomainDatabaseError(error, 'appointment');
   if (!data) throw new DomainError('not_found', 'Appointment not found.');
   return data;
+}
+
+export async function updateAppointment(appointmentId: string, input: AppointmentUpdateInput): Promise<Appointment> {
+  return updateAppointmentRecord(appointmentId, input);
+}
+
+export async function cancelAppointment(appointmentId: string): Promise<Appointment> {
+  const validId = parseDomain(idSchema, appointmentId);
+  return updateAppointmentRecord(validId, { status: 'cancelled' }, true);
 }

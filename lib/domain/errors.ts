@@ -14,6 +14,10 @@ export type DomainErrorCode =
   | 'appointment_interval_invalid'
   | 'appointment_duration_invalid'
   | 'appointment_timezone_invalid'
+  | 'appointment_local_time_invalid'
+  | 'appointment_local_time_ambiguous'
+  | 'appointment_reschedule_required'
+  | 'appointment_cancellation_required'
   | 'scheduling_configuration_invalid'
   | 'scheduling_configuration_unavailable'
   | 'appointment_outside_business_hours'
@@ -21,6 +25,28 @@ export type DomainErrorCode =
   | 'appointment_conflict'
   | 'appointment_reschedule_invalid'
   | 'appointment_operation_invalid'
+  | 'whatsapp_configuration_invalid'
+  | 'whatsapp_provider_lookup_failed'
+  | 'whatsapp_verification_invalid'
+  | 'whatsapp_signature_invalid'
+  | 'whatsapp_payload_invalid'
+  | 'whatsapp_configuration_unavailable'
+  | 'whatsapp_destination_invalid'
+  | 'whatsapp_message_invalid'
+  | 'whatsapp_provider_rejected'
+  | 'whatsapp_provider_unavailable'
+  | 'whatsapp_provider_rate_limited'
+  | 'whatsapp_provider_unreachable'
+  | 'whatsapp_provider_network_failure'
+  | 'whatsapp_provider_response_invalid'
+  | 'whatsapp_pipeline_input_invalid'
+  | 'whatsapp_pipeline_persistence_failed'
+  | 'whatsapp_tenant_mismatch'
+  | 'whatsapp_duplicate_provider_message'
+  | 'whatsapp_conversation_invalid'
+  | 'whatsapp_status_persistence_failed'
+  | 'whatsapp_message_unconfirmed'
+  | 'whatsapp_retry_worker_failed'
   | 'database_error';
 
 export class DomainError extends Error {
@@ -98,6 +124,10 @@ export function mapAppointmentSchedulingError(errorCode: string | null | undefin
       return new DomainError('appointment_reschedule_invalid', 'This appointment cannot be rescheduled.');
     case 'appointment_operation_invalid':
       return new DomainError('appointment_operation_invalid', 'The appointment operation is invalid.');
+    case 'appointment_local_time_invalid':
+      return new DomainError('appointment_local_time_invalid', 'The selected local time does not exist in the organization timezone.');
+    case 'appointment_local_time_ambiguous':
+      return new DomainError('appointment_local_time_ambiguous', 'The selected local time is ambiguous in the organization timezone.');
     default:
       return new DomainError('database_error', 'The domain operation could not be completed.');
   }

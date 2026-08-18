@@ -6,10 +6,13 @@ import { redirect } from "next/navigation";
 import { DomainError } from "@/lib/domain/errors";
 import {
   bookAppointment,
+  cancelAppointment,
   getAppointment,
   rescheduleAppointment,
   updateAppointment,
+  getSchedulingSettings,
 } from "@/lib/domain/appointments/repository";
+import { localDateTimeToUtc } from "@/lib/domain/appointments/scheduling";
 import {
   appointmentStatusSchema,
   idSchema,
@@ -37,18 +40,18 @@ function getAppointmentValues(formData: FormData): Record<string, string | null>
   };
 }
 
-function normalizeDateTime(value: string | null): string {
-  const parsed = new Date(String(value));
-  if (Number.isNaN(parsed.getTime())) return String(value);
-  return parsed.toISOString();
+function normalizeDateTime(value: string | null, timezone: string): string {
+  if (!value) return "";
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(value)) return value;
+  return localDateTimeToUtc(value, timezone);
 }
 
-function normalizedValues(formData: FormData): Record<string, FormDataEntryValue> {
+function normalizedValues(formData: FormData, timezone: string): Record<string, FormDataEntryValue> {
   const values = getAppointmentValues(formData);
   return {
     ...values,
-    startsAt: normalizeDateTime(values["startsAt"] ?? null),
-    endsAt: normalizeDateTime(values["endsAt"] ?? null),
+    startsAt: normalizeDateTime(values["startsAt"] ?? null, timezone),
+    endsAt: normalizeDateTime(values["endsAt"] ?? null, timezone),
   };
 }
 
@@ -58,7 +61,8 @@ export async function createAppointmentAction(
 ): Promise<AppointmentActionState> {
   let appointmentId: string | undefined;
   try {
-    const input = parseAppointmentCreate(normalizedValues(formData));
+    const settings = await getSchedulingSettings();
+    const input = parseAppointmentCreate(normalizedValues(formData, settings.timezone));
     const appointment = await bookAppointment(input);
     appointmentId = appointment.id;
     revalidatePath("/dashboard");
@@ -81,7 +85,8 @@ export async function updateAppointmentAction(
 ): Promise<AppointmentActionState> {
   try {
     const validId = parseDomain(idSchema, appointmentId);
-    const input = parseAppointmentUpdate(normalizedValues(formData));
+    const settings = await getSchedulingSettings();
+    const input = parseAppointmentUpdate(normalizedValues(formData, settings.timezone));
     const current = await getAppointment(validId);
     const startsAt = input.startsAt ?? current.starts_at;
     const endsAt = input.endsAt ?? current.ends_at;
@@ -97,8 +102,12 @@ export async function updateAppointmentAction(
       status: input.status,
       notes: input.notes,
     };
+    if (input.status === 'cancelled') delete remainingInput.status;
     if (Object.keys(remainingInput).length > 0) {
       await updateAppointment(validId, remainingInput);
+    }
+    if (input.status === 'cancelled') {
+      await cancelAppointment(validId);
     }
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/appointments");
@@ -121,6 +130,24 @@ export async function updateAppointmentStatusAction(
       status: formData.get("status"),
     });
     await updateAppointment(validId, status);
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/appointments");
+    revalidatePath(`/dashboard/appointments/${validId}`);
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+
+  redirect(`/dashboard/appointments/${appointmentId}`);
+}
+
+export async function cancelAppointmentAction(
+  appointmentId: string,
+  _previousState: AppointmentActionState,
+  _formData: FormData
+): Promise<AppointmentActionState> {
+  try {
+    const validId = parseDomain(idSchema, appointmentId);
+    await cancelAppointment(validId);
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/appointments");
     revalidatePath(`/dashboard/appointments/${validId}`);

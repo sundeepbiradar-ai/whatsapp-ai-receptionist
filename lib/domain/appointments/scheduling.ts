@@ -29,6 +29,79 @@ type SchedulingSettingsInput = {
 
 type LocalTime = { date: string; weekday: SchedulingWeekday; minutes: number };
 
+const localDateTimePattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
+
+function localParts(timestamp: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(timestamp);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values['year']}-${values['month']}-${values['day']}T${values['hour']}:${values['minute']}:${values['second']}`;
+}
+
+export function localDateTimeToUtc(value: string, timezone: string): string {
+  assertValidTimezone(timezone);
+  const match = localDateTimePattern.exec(value);
+  if (!match) {
+    throw new DomainError('appointment_local_time_invalid', 'Appointment local time must use YYYY-MM-DDTHH:mm format.');
+  }
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText = '00'] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  const naive = Date.UTC(year, month - 1, day, hour, minute, second);
+  if (new Date(naive).toISOString().slice(0, 19) !== `${value.length === 16 ? `${value}:00` : value}`) {
+    throw new DomainError('appointment_local_time_invalid', 'Appointment local time is invalid.');
+  }
+
+  const matches: number[] = [];
+  const searchStart = naive - 36 * 60 * 60 * 1000;
+  const searchEnd = naive + 36 * 60 * 60 * 1000;
+  const requested = `${yearText}-${monthText}-${dayText}T${hourText}:${minuteText}:${secondText}`;
+  for (let candidate = searchStart; candidate <= searchEnd; candidate += 60 * 1000) {
+    if (localParts(new Date(candidate), timezone) === requested) matches.push(candidate);
+  }
+  if (matches.length === 0) {
+    throw new DomainError('appointment_local_time_invalid', 'Appointment local time does not exist in the organization timezone.');
+  }
+  if (matches.length > 1) {
+    throw new DomainError('appointment_local_time_ambiguous', 'Appointment local time is ambiguous in the organization timezone.');
+  }
+  return new Date(matches[0] as number).toISOString();
+}
+
+export function formatInTimezone(timestamp: string, timezone: string): string {
+  assertValidTimezone(timezone);
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    throw new DomainError('appointment_scheduling_input_invalid', 'Invalid scheduling timestamp.');
+  }
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
+export function formatLocalDateTimeInput(timestamp: string, timezone: string): string {
+  assertValidTimezone(timezone);
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    throw new DomainError('appointment_scheduling_input_invalid', 'Invalid scheduling timestamp.');
+  }
+  return localParts(date, timezone).slice(0, 16);
+}
+
 function isWeekday(value: unknown): value is SchedulingWeekday {
   return typeof value === 'string' && (schedulingWeekdays as readonly string[]).includes(value);
 }

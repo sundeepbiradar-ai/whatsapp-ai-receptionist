@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { DomainError } from '@/lib/domain/errors';
 import {
   assertWithinBusinessHours,
+  formatInTimezone,
+  formatLocalDateTimeInput,
   intervalsConflict,
+  localDateTimeToUtc,
   parseSchedulingSettings,
 } from '@/lib/domain/appointments/scheduling';
 import { parseSchedulingInterval } from '@/lib/domain/validation';
@@ -85,5 +88,28 @@ describe('appointment scheduling domain rules', () => {
     const settings = parseSchedulingSettings({ ...weekdaySettings, timezone: 'America/New_York' });
     expect(() => assertWithinBusinessHours(settings, '2099-03-09T13:00:00Z', '2099-03-09T13:30:00Z')).not.toThrow();
     expect(() => assertWithinBusinessHours(settings, '2099-11-03T14:00:00Z', '2099-11-03T14:30:00Z')).not.toThrow();
+  });
+
+  it('converts organization-local time to the same instant regardless of server timezone', () => {
+    const local = '2030-02-01T09:00';
+    const expected = '2030-02-01T03:30:00.000Z';
+    expect(localDateTimeToUtc(local, 'Asia/Kolkata')).toBe(expected);
+    expect(localDateTimeToUtc(local, 'Asia/Kolkata')).toBe(expected);
+  });
+
+  it('rejects nonexistent and ambiguous DST local times', () => {
+    expect(() => localDateTimeToUtc('2024-03-10T02:30', 'America/New_York')).toThrowError(
+      expect.objectContaining({ code: 'appointment_local_time_invalid' })
+    );
+    expect(() => localDateTimeToUtc('2024-11-03T01:30', 'America/New_York')).toThrowError(
+      expect.objectContaining({ code: 'appointment_local_time_ambiguous' })
+    );
+    expect(localDateTimeToUtc('2024-03-10T01:30', 'America/New_York')).toBe('2024-03-10T06:30:00.000Z');
+    expect(localDateTimeToUtc('2024-03-10T03:30', 'America/New_York')).toBe('2024-03-10T07:30:00.000Z');
+  });
+
+  it('formats persisted instants in the organization timezone', () => {
+    expect(formatLocalDateTimeInput('2030-02-01T03:30:00.000Z', 'Asia/Kolkata')).toBe('2030-02-01T09:00');
+    expect(formatInTimezone('2030-02-01T03:30:00.000Z', 'Asia/Kolkata')).toContain('Feb 1, 2030');
   });
 });

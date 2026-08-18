@@ -234,6 +234,83 @@ integrationDescribe("Phase 3.2 runtime domain security", () => {
     await admin.from("appointments").delete().eq("id", appointmentA.data!.id);
   });
 
+  it("rejects cross-tenant appointment cancellation without changing the appointment", async () => {
+    const appointment = await admin.from("appointments").insert({
+      organization_id: fixture.organizationBId,
+      contact_id: fixture.contactBId,
+      conversation_id: fixture.conversationBId,
+      starts_at: "2099-02-03T10:00:00Z",
+      ends_at: "2099-02-03T11:00:00Z",
+      status: "confirmed",
+      notes: "Must remain unchanged",
+    }).select("id, organization_id, contact_id, conversation_id, status, starts_at, ends_at, notes").single();
+    if (appointment.error || !appointment.data) throw appointment.error ?? new Error("Appointment fixture was not created");
+
+    const attemptedCancel = await userAClient
+      .from("appointments")
+      .update({ status: "cancelled" })
+      .eq("id", appointment.data.id)
+      .select("id");
+    const persisted = await admin
+      .from("appointments")
+      .select("id, organization_id, contact_id, conversation_id, status, starts_at, ends_at, notes")
+      .eq("id", appointment.data.id)
+      .single();
+
+    expect(attemptedCancel.error).toBeNull();
+    expect(attemptedCancel.data).toHaveLength(0);
+    expect(persisted.error).toBeNull();
+    expect(persisted.data).toEqual(appointment.data);
+
+    await admin.from("appointments").delete().eq("id", appointment.data.id);
+  });
+
+  it("queries appointments by tenant, status, and deterministic date order", async () => {
+    const first = await admin.from("appointments").insert({
+      organization_id: fixture.organizationAId,
+      contact_id: fixture.contactAId,
+      conversation_id: fixture.conversationAId,
+      starts_at: "2099-03-01T10:00:00Z",
+      ends_at: "2099-03-01T11:00:00Z",
+      status: "confirmed",
+    }).select("id").single();
+    const second = await admin.from("appointments").insert({
+      organization_id: fixture.organizationAId,
+      contact_id: fixture.contactAId,
+      conversation_id: fixture.conversationAId,
+      starts_at: "2099-03-01T10:00:00Z",
+      ends_at: "2099-03-01T11:00:00Z",
+      status: "pending",
+    }).select("id").single();
+    const other = await admin.from("appointments").insert({
+      organization_id: fixture.organizationBId,
+      contact_id: fixture.contactBId,
+      conversation_id: fixture.conversationBId,
+      starts_at: "2099-03-01T10:00:00Z",
+      ends_at: "2099-03-01T11:00:00Z",
+      status: "confirmed",
+    }).select("id").single();
+    if (first.error || second.error || other.error) throw first.error ?? second.error ?? other.error;
+
+    const result = await userAClient
+      .from("appointments")
+      .select("id, status, starts_at", { count: "exact" })
+      .eq("organization_id", fixture.organizationAId)
+      .eq("status", "confirmed")
+      .gte("starts_at", "2099-03-01T10:00:00Z")
+      .lt("starts_at", "2099-03-02T00:00:00Z")
+      .order("starts_at", { ascending: true })
+      .order("id", { ascending: true });
+
+    expect(result.error).toBeNull();
+    expect(result.count).toBe(1);
+    expect(result.data).toHaveLength(1);
+    expect(result.data?.[0]?.id).toBe(first.data?.id);
+    expect(result.data?.some((appointment) => appointment.id === other.data?.id)).toBe(false);
+
+    await admin.from("appointments").delete().in("id", [first.data?.id ?? "", second.data?.id ?? "", other.data?.id ?? ""]);
+  });
+
   it("allows members to read own conversations and messages only", async () => {
     const ownConversation = await userAClient.from("conversations").select("id").eq("id", fixture.conversationAId);
     const otherConversation = await userAClient.from("conversations").select("id").eq("id", fixture.conversationBId);

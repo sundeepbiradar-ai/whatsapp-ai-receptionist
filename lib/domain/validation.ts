@@ -125,6 +125,14 @@ export function parseSchedulingInterval(input: unknown): SchedulingIntervalInput
   return result.data;
 }
 
+export function parseAppointmentTimestamp(input: unknown): string {
+  const result = z.string().datetime({ offset: true }).safeParse(input);
+  if (!result.success) {
+    throw new DomainError('invalid_input', 'Appointment date filters require an offset-aware timestamp.');
+  }
+  return result.data;
+}
+
 export function assertAppointmentTimeRange(startsAt: string, endsAt: string): void {
   if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
     throw new DomainError('appointment_time_invalid', 'Appointment end must be later than its start.');

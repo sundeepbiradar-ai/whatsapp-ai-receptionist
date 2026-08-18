@@ -3,12 +3,14 @@
 import { useFormState, useFormStatus } from "react-dom";
 
 import type { AppointmentActionState } from "@/lib/domain/appointments/actions";
+import { formatLocalDateTimeInput } from "@/lib/domain/appointments/scheduling";
 
 type Option = { id: string; label: string };
 type AppointmentFormProps = {
   action: (previous: AppointmentActionState, formData: FormData) => Promise<AppointmentActionState>;
   contacts: Option[];
   conversations: Option[];
+  timezone: string;
   appointment?: {
     contact_id: string;
     conversation_id: string | null;
@@ -19,11 +21,9 @@ type AppointmentFormProps = {
   };
 };
 
-function localValue(value?: string | null): string {
+function localValue(value: string | null | undefined, timezone: string): string {
   if (!value) return "";
-  const date = new Date(value);
-  const offset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+  return formatLocalDateTimeInput(value, timezone);
 }
 
 function SubmitButton(): React.ReactElement {
@@ -31,7 +31,7 @@ function SubmitButton(): React.ReactElement {
   return <button className="button-primary" disabled={pending} type="submit">{pending ? "Saving..." : "Save appointment"}</button>;
 }
 
-export function AppointmentForm({ action, contacts, conversations, appointment }: AppointmentFormProps): React.ReactElement {
+export function AppointmentForm({ action, contacts, conversations, timezone, appointment }: AppointmentFormProps): React.ReactElement {
   const [state, formAction] = useFormState(action, {});
 
   return (
@@ -54,11 +54,11 @@ export function AppointmentForm({ action, contacts, conversations, appointment }
       <div className="grid gap-5 sm:grid-cols-2">
         <div>
           <label className="mb-2 block text-sm font-medium text-gray-900" htmlFor="startsAt">Starts</label>
-          <input className="block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900" defaultValue={localValue(appointment?.starts_at)} id="startsAt" name="startsAt" required type="datetime-local" />
+          <input className="block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900" defaultValue={localValue(appointment?.starts_at, timezone)} id="startsAt" name="startsAt" required type="datetime-local" />
         </div>
         <div>
           <label className="mb-2 block text-sm font-medium text-gray-900" htmlFor="endsAt">Ends</label>
-          <input className="block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900" defaultValue={localValue(appointment?.ends_at)} id="endsAt" name="endsAt" required type="datetime-local" />
+          <input className="block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900" defaultValue={localValue(appointment?.ends_at, timezone)} id="endsAt" name="endsAt" required type="datetime-local" />
         </div>
       </div>
       <div>

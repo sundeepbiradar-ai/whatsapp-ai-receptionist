@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  cancelAppointment,
   createAppointment,
+  queryAppointments,
+  rescheduleAppointment,
   updateAppointment,
 } from '@/lib/domain/appointments/repository';
 
@@ -36,12 +39,18 @@ const appointment = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-type QueryResult = { data: unknown; error: null | { code?: string; message?: string } };
+type QueryResult = { data: unknown; count?: number | null; error: null | { code?: string; message?: string } };
 
 function query(result: QueryResult): Record<string, unknown> {
   const builder: Record<string, unknown> = {
     select: vi.fn(() => builder),
     eq: vi.fn(() => builder),
+    in: vi.fn(() => builder),
+    gte: vi.fn(() => builder),
+    lt: vi.fn(() => builder),
+    gt: vi.fn(() => builder),
+    order: vi.fn(() => builder),
+    range: vi.fn(async () => result),
     maybeSingle: vi.fn(async () => result),
     single: vi.fn(async () => result),
     then: (resolve: (value: QueryResult) => unknown) => Promise.resolve(result).then(resolve),
@@ -63,6 +72,25 @@ const state = vi.hoisted(() => ({
     error: null,
   },
   updateResult: { data: null as unknown, error: null as null | { code?: string; message?: string } },
+  queryResult: { data: [] as unknown[], count: 0, error: null as null | { code?: string; message?: string } },
+  schedulingSettingsResult: {
+    data: {
+      organization_id: '11111111-1111-4111-8111-111111111111',
+      timezone: 'UTC',
+      working_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+      business_hours: {
+        monday: { start: '09:00', end: '17:00' },
+        tuesday: { start: '09:00', end: '17:00' },
+        wednesday: { start: '09:00', end: '17:00' },
+        thursday: { start: '09:00', end: '17:00' },
+        friday: { start: '09:00', end: '17:00' },
+      },
+      default_duration_minutes: 30,
+    },
+    error: null as null | { code?: string; message?: string },
+  },
+  rpcResult: { data: null as unknown, error: null as null | { code?: string; message?: string } },
+  rpcCalls: [] as Array<{ name: string; args: unknown }>,
 }));
 
 vi.mock('@/lib/domain/context', () => ({
@@ -77,8 +105,23 @@ vi.mock('@/lib/supabase/server', () => ({
     from: vi.fn((table: string) => {
       if (table === 'contacts') return query(state.contactResult);
       if (table === 'conversations') return query(state.conversationResult);
+      if (table === 'organization_scheduling_settings') return query(state.schedulingSettingsResult);
+      if (table === 'organization_blocked_periods') return query({ data: [], error: null });
+      if (table === 'appointments') {
+        const builder = query(state.appointmentResult);
+        builder['select'] = vi.fn((selection: string, options?: unknown) => {
+          if (options) return query(state.queryResult);
+          return selection.includes('organization_id') ? builder : query({ data: [], error: null });
+        });
+        builder['update'] = vi.fn(() => ({
+          eq: vi.fn(() => ({
+            eq: vi.fn(() => query(state.updateResult)),
+          })),
+        }));
+        return builder;
+      }
       return {
-        select: vi.fn(() => query(state.appointmentResult)),
+        select: vi.fn((...args: unknown[]) => query(args.length > 1 ? state.queryResult : state.appointmentResult)),
         insert: vi.fn(() => ({
           select: vi.fn(() => query(state.appointmentResult)),
         })),
@@ -88,6 +131,10 @@ vi.mock('@/lib/supabase/server', () => ({
           })),
         })),
       };
+    }),
+    rpc: vi.fn(async (name: string, args: unknown) => {
+      state.rpcCalls.push({ name, args });
+      return state.rpcResult;
     }),
   })),
 }));
@@ -102,6 +149,10 @@ describe('appointment repository domain rules', () => {
     state.contactResult = { data: { id: contactId }, error: null };
     state.conversationResult = { data: { id: conversationId, contact_id: contactId }, error: null };
     state.updateResult = { data: null, error: null };
+    state.queryResult = { data: [], count: 0, error: null };
+    state.schedulingSettingsResult.error = null;
+    state.rpcResult = { data: { ok: true, appointment_id: '22222222-2222-4222-8222-222222222222' }, error: null };
+    state.rpcCalls = [];
   });
 
   it('rejects past creation and accepts valid future creation', async () => {
@@ -124,13 +175,53 @@ describe('appointment repository domain rules', () => {
       endsAt: '2099-01-01T11:00:00.000Z',
       status: 'pending',
     })).resolves.toEqual(futureAppointment);
+    expect(state.rpcCalls).toHaveLength(1);
+    expect(state.rpcCalls[0]).toMatchObject({
+      name: 'book_or_reschedule_appointment',
+      args: expect.objectContaining({ operation: 'book' }),
+    });
+  });
+
+  it('reschedules through the authoritative RPC and preserves the appointment id', async () => {
+    state.appointmentResult = { data: appointment({ status: 'confirmed' }), error: null };
+    const rescheduled = appointment({ starts_at: '2099-01-01T12:00:00.000Z', ends_at: '2099-01-01T13:00:00.000Z' });
+    state.appointmentResult = { data: rescheduled, error: null };
+
+    await expect(rescheduleAppointment(appointmentId, {
+      startsAt: '2099-01-01T12:00:00.000Z',
+      endsAt: '2099-01-01T13:00:00.000Z',
+    })).resolves.toMatchObject({ id: appointmentId, starts_at: rescheduled.starts_at });
+    expect(state.rpcCalls).toHaveLength(1);
+    expect(state.rpcCalls[0]).toMatchObject({
+      name: 'book_or_reschedule_appointment',
+      args: expect.objectContaining({ operation: 'reschedule', target_appointment_id: appointmentId }),
+    });
+  });
+
+  it('queries appointments with status, date, and pagination options', async () => {
+    const first = appointment({ id: '77777777-7777-4777-8777-777777777777' });
+    state.queryResult = { data: [first], count: 3, error: null };
+
+    await expect(queryAppointments({
+      statuses: ['confirmed'],
+      startsAtFrom: '2099-01-01T00:00:00.000Z',
+      startsAtTo: '2099-02-01T00:00:00.000Z',
+      page: 2,
+      pageSize: 1,
+    })).resolves.toEqual({ appointments: [first], page: 2, pageSize: 1, total: 3 });
+  });
+
+  it('rejects invalid appointment query ranges and pagination', async () => {
+    await expect(queryAppointments({
+      startsAtFrom: '2099-02-01T00:00:00.000Z',
+      startsAtTo: '2099-01-01T00:00:00.000Z',
+    })).rejects.toMatchObject({ code: 'invalid_input' });
+    await expect(queryAppointments({ page: 0 })).rejects.toMatchObject({ code: 'invalid_input' });
   });
 
   it.each([
     ['pending', 'confirmed'],
-    ['pending', 'cancelled'],
     ['confirmed', 'completed'],
-    ['confirmed', 'cancelled'],
   ] as const)('allows %s -> %s through the repository', async (currentStatus, nextStatus) => {
     state.appointmentResult = { data: appointment({ status: currentStatus }), error: null };
     state.updateResult = { data: appointment({ status: nextStatus }), error: null };
@@ -145,10 +236,8 @@ describe('appointment repository domain rules', () => {
     ['confirmed', 'pending', 'appointment_transition_invalid'],
     ['cancelled', 'pending', 'appointment_terminal'],
     ['cancelled', 'confirmed', 'appointment_terminal'],
-    ['cancelled', 'cancelled', 'appointment_terminal'],
     ['completed', 'pending', 'appointment_terminal'],
     ['completed', 'confirmed', 'appointment_terminal'],
-    ['completed', 'cancelled', 'appointment_terminal'],
   ] as const)('rejects %s -> %s through the repository', async (currentStatus, nextStatus, errorCode) => {
     state.appointmentResult = { data: appointment({ status: currentStatus }), error: null };
 
@@ -164,6 +253,36 @@ describe('appointment repository domain rules', () => {
 
     await expect(updateAppointment(appointmentId, { notes: 'Updated', status: 'confirmed' }))
       .resolves.toMatchObject({ status: 'confirmed', notes: 'Updated' });
+  });
+
+  it('cancels through the authoritative repository operation', async () => {
+    state.appointmentResult = { data: appointment({ status: 'confirmed' }), error: null };
+    state.updateResult = { data: appointment({ status: 'cancelled' }), error: null };
+
+    await expect(cancelAppointment(appointmentId)).resolves.toMatchObject({
+      id: appointmentId,
+      status: 'cancelled',
+    });
+  });
+
+  it('rejects generic cancellation so callers must use cancelAppointment', async () => {
+    state.appointmentResult = { data: appointment({ status: 'confirmed' }), error: null };
+
+    await expectDomainError(updateAppointment(appointmentId, { status: 'cancelled' }), 'appointment_cancellation_required');
+  });
+
+  it('rejects completed cancellation and preserves the appointment state', async () => {
+    const completedAppointment = appointment({
+      status: 'completed',
+      starts_at: '2020-01-01T10:00:00.000Z',
+      ends_at: '2020-01-01T11:00:00.000Z',
+      notes: 'Completed record',
+    });
+    state.appointmentResult = { data: completedAppointment, error: null };
+
+    await expectDomainError(cancelAppointment(appointmentId), 'appointment_terminal');
+    expect(state.appointmentResult.data).toEqual(completedAppointment);
+    expect(state.updateResult.data).toBeNull();
   });
 
   it.each(['cancelled', 'completed'] as const)('rejects normal edits to %s appointments', async (status) => {
@@ -185,8 +304,8 @@ describe('appointment repository domain rules', () => {
     state.updateResult = { data: appointment({ status: 'cancelled' }), error: null };
 
     await expect(updateAppointment(appointmentId, { notes: 'Reconciled' })).resolves.toBeTruthy();
-    await expect(updateAppointment(appointmentId, { status: 'cancelled' })).resolves.toBeTruthy();
-    await expectDomainError(updateAppointment(appointmentId, { endsAt: '2020-01-01T12:00:00.000Z' }), 'appointment_past');
+    await expect(cancelAppointment(appointmentId)).resolves.toBeTruthy();
+    await expectDomainError(updateAppointment(appointmentId, { endsAt: '2020-01-01T12:00:00.000Z' }), 'appointment_reschedule_required');
     await expectDomainError(updateAppointment(appointmentId, { contactId: otherContactId }), 'appointment_past');
     await expectDomainError(updateAppointment(appointmentId, { conversationId: otherConversationId }), 'appointment_past');
   });
@@ -202,7 +321,7 @@ describe('appointment repository domain rules', () => {
     };
     state.updateResult = { data: appointment({ status: 'cancelled' }), error: null };
 
-    await expect(updateAppointment(appointmentId, { status: 'cancelled' }))
+    await expect(cancelAppointment(appointmentId))
       .resolves.toMatchObject({ status: 'cancelled' });
   });
 
@@ -220,13 +339,14 @@ describe('appointment repository domain rules', () => {
     state.appointmentResult = { data: appointment({ status: 'confirmed' }), error: null };
     state.updateResult = { data: appointment({ status: 'cancelled' }), error: null };
 
-    await expect(updateAppointment(appointmentId, { conversationId, status: 'cancelled' }))
+    await expect(updateAppointment(appointmentId, { conversationId })).resolves.toBeTruthy();
+    await expect(cancelAppointment(appointmentId))
       .resolves.toMatchObject({ status: 'cancelled', id: appointmentId });
   });
 
   it('maps appointment database failures safely and logs their details', async () => {
     const error = { code: '23503', details: 'internal detail', message: 'internal message' };
-    state.contactResult = { data: null, error };
+    state.rpcResult = { data: null, error };
 
     const logSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     await expectDomainError(createAppointment({

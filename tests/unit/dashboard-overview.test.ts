@@ -14,6 +14,8 @@ const conversation = (id: string): Conversation => ({
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
   last_message_at: null,
+  channel: null,
+  whatsapp_config_id: null,
 });
 
 const appointment = (id: string, startsAt: string, status: Appointment['status']): Appointment => ({
