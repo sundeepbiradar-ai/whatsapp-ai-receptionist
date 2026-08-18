@@ -5,15 +5,16 @@ blockers, and the rule for moving to the next step.
 
 ## Current Status
 
-| Item                     | Status                                             |
-| ------------------------ | -------------------------------------------------- |
-| Current phase            | Phase 5.3 - WhatsApp Reliability                   |
-| Current step             | Reliability complete; deployment verification next |
-| Completed phases         | 3 of 9                                             |
-| Completed Phase 4 steps  | 10 of 10                                           |
-| Overall phase completion | 33.3%                                              |
-| Phase 4 completion       | 100%                                               |
-| Active blockers          | None; deployment verification pending              |
+| Item                     | Status                                              |
+| ------------------------ | --------------------------------------------------- |
+| Current phase            | Phase 5.3 - WhatsApp Reliability                    |
+| Current step             | Reliability complete; deployment verification next  |
+| Completed phases         | 4 of 9                                              |
+| Overall phase completion | 44.4%                                               |
+| Phase 4 completion       | 100% (10 of 10 steps)                               |
+| Phase 5 completion       | Implementation 100%; deployment verification open   |
+| Latest validation        | 203 unit, 75 integration, typecheck/lint/build pass |
+| Active blockers          | None; deployment verification pending               |
 
 ## Advancement Gate
 
@@ -95,15 +96,15 @@ the assertion only when the intended behavior has deliberately changed.
 
 | Step                                                 | Status   | Validation               | Blocker                 |
 | ---------------------------------------------------- | -------- | ------------------------ | ----------------------- |
-| WhatsApp provider integration                        | Complete | 157 unit, 58 integration | None                    |
-| Webhook validation and incoming/outgoing messages    | Complete | 157 unit, 58 integration | Live Meta verification  |
-| Message status handling                              | Complete | 157 unit, 58 integration | Live Meta verification  |
-| Conversation pipeline                                | Complete | 157 unit, 58 integration | None                    |
+| WhatsApp provider integration                        | Complete | 203 unit, 75 integration | None                    |
+| Webhook validation and incoming/outgoing messages    | Complete | 203 unit, 75 integration | Live Meta verification  |
+| Message status handling                              | Complete | 203 unit, 75 integration | Live Meta verification  |
+| Conversation pipeline                                | Complete | 203 unit, 75 integration | None                    |
 | Idempotency, retries, duplicate handling, and errors | Complete | 203 unit, 75 integration | Deployment verification |
 
 The Phase 5.2 row in the Validation Record reported a combined unit and
 integration total. From Phase 5.3 onward the two counts are recorded
-separately: 157 unit tests and 58 integration tests.
+separately. The counts above are from the latest full-suite run.
 
 ### Phase 5.1 Configuration Foundation
 
@@ -268,15 +269,16 @@ Deployment verification still pending:
 
 ## Phase 6 - AI Receptionist
 
-**Status: Planned - blocked until Phase 5 is complete**
+**Status: Not started - Phase 5 implementation is complete, so this phase is
+unblocked once deployment verification is scheduled**
 
-| Step                                                   | Status  | Validation | Blocker                  |
-| ------------------------------------------------------ | ------- | ---------- | ------------------------ |
-| Intent detection                                       | Planned | Not run    | Phase 5 incomplete       |
-| Conversation state and required information collection | Planned | Not run    | Phase 5 incomplete       |
-| Natural scheduling conversation                        | Planned | Not run    | Phase 5 incomplete       |
-| Appointment-engine tool calling                        | Planned | Not run    | Phase 4 and 5 incomplete |
-| Real availability and business-function responses      | Planned | Not run    | Phase 4 and 5 incomplete |
+| Step                                                   | Status      | Validation | Blocker                      |
+| ------------------------------------------------------ | ----------- | ---------- | ---------------------------- |
+| Intent detection                                       | Not started | Not run    | None; awaiting phase kickoff |
+| Conversation state and required information collection | Not started | Not run    | None; awaiting phase kickoff |
+| Natural scheduling conversation                        | Not started | Not run    | None; awaiting phase kickoff |
+| Appointment-engine tool calling                        | Not started | Not run    | None; awaiting phase kickoff |
+| Real availability and business-function responses      | Not started | Not run    | None; awaiting phase kickoff |
 
 ## Phase 7 - Business Configuration
 
