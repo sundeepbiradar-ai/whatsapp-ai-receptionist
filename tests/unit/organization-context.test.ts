@@ -7,7 +7,10 @@ import {
 } from "@/lib/organizations/types";
 import type { Database } from "@/lib/supabase/database";
 
-type Organization = Database["public"]["Tables"]["organizations"]["Row"];
+type Organization = Pick<
+  Database["public"]["Tables"]["organizations"]["Row"],
+  "id" | "name" | "slug" | "created_at" | "updated_at"
+>;
 type Membership = Database["public"]["Tables"]["organization_members"]["Row"];
 
 const user: User = {

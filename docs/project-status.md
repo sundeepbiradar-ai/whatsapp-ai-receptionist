@@ -5,17 +5,18 @@ blockers, and the rule for moving to the next step.
 
 ## Current Status
 
-| Item                     | Status                                              |
-| ------------------------ | --------------------------------------------------- |
-| Current phase            | Phase 6.4 - Tool Calling                            |
-| Current step             | Phase 6 AI receptionist core complete               |
-| Completed phases         | 5 of 9                                              |
-| Overall phase completion | 55.6%                                               |
-| Phase 4 completion       | 100% (10 of 10 steps)                               |
-| Phase 5 completion       | Implementation 100%; deployment verification open   |
-| Phase 6 completion       | Core complete (6.1, 6.2, 6.3, 6.4)                  |
-| Latest validation        | 438 unit, 96 integration, typecheck/lint/build pass |
-| Active blockers          | None; deployment verification pending               |
+| Item                     | Status                                               |
+| ------------------------ | ---------------------------------------------------- |
+| Current phase            | Phase 7 - Business Configuration                     |
+| Current step             | Business configuration complete; Phase 8 not started |
+| Completed phases         | 6 of 9                                               |
+| Overall phase completion | 66.7%                                                |
+| Phase 4 completion       | 100% (10 of 10 steps)                                |
+| Phase 5 completion       | Implementation 100%; deployment verification open    |
+| Phase 6 completion       | Core complete (6.1, 6.2, 6.3, 6.4)                   |
+| Phase 7 completion       | 100%                                                 |
+| Latest validation        | 466 unit, 110 integration, typecheck/lint/build pass |
+| Active blockers          | None; deployment verification pending                |
 
 ## Advancement Gate
 
@@ -427,15 +428,48 @@ rather than implementation gaps.
 
 ## Phase 7 - Business Configuration
 
-**Status: Planned - blocked until Phase 6 is complete**
+**Status: PHASE 7 BUSINESS CONFIGURATION COMPLETE**
 
-| Step                                  | Status  | Validation | Blocker            |
-| ------------------------------------- | ------- | ---------- | ------------------ |
-| Business hours and timezone           | Planned | Not run    | Phase 6 incomplete |
-| Appointment duration and services     | Planned | Not run    | Phase 6 incomplete |
-| Booking and cancellation rules        | Planned | Not run    | Phase 6 incomplete |
-| Receptionist personality and greeting | Planned | Not run    | Phase 6 incomplete |
-| Escalation rules                      | Planned | Not run    | Phase 6 incomplete |
+| Step                              | Status      | Validation                | Blocker                   |
+| --------------------------------- | ----------- | ------------------------- | ------------------------- |
+| Business profile                  | Complete    | 466 unit, 110 integration | None                      |
+| Business hours and timezone       | Complete    | 466 unit, 110 integration | None                      |
+| Appointment duration              | Complete    | 466 unit, 110 integration | None                      |
+| Blocked periods                   | Complete    | 466 unit, 110 integration | None                      |
+| WhatsApp configuration metadata   | Complete    | 466 unit, 110 integration | None                      |
+| Receptionist instructions and FAQ | Complete    | 466 unit, 110 integration | None                      |
+| Escalation rules                  | Not started | Not run                   | Deferred; no product rule |
+
+- Business profile adds nullable `description`, `public_email`, `public_phone`
+  and `address` to `organizations`. The Phase 2 blanket update denial is
+  replaced by an owner/admin policy combined with a column-level grant, so
+  profile text is editable while `id`, `slug` and identity columns stay out of
+  client reach.
+- Scheduling configuration reuses the Phase 4 validators
+  (`parseSchedulingSettings`, `assertValidTimezone`) rather than duplicating
+  them, preserving minute precision, non-overnight intervals, valid IANA
+  timezones, disabled-day semantics and the 1-1440 duration bounds.
+- Blocked periods gain list, create and delete boundaries. Availability
+  semantics are unchanged, and overlapping periods remain allowed.
+- WhatsApp management is limited to safe metadata: phone number ID, business
+  account ID, display number and active state. Access tokens, app secrets,
+  verify tokens and Vault references are never selected, returned or rendered,
+  and `organization_whatsapp_secret_refs` remains unreachable to every client
+  role.
+- Receptionist instructions and FAQ live in a dedicated
+  `organization_receptionist_settings` table, deliberately separate from
+  provider configuration. They are bounded tenant-authored text and are treated
+  as untrusted data, not system instructions.
+- Phase 4 shipped scheduling and blocked-period writes to any member. Phase 7
+  tightens those to owner/admin while leaving member read access unchanged.
+  Authorization is enforced in RLS and re-checked server-side, never by hiding
+  UI controls.
+- `getBusinessConfiguration()` is the single read boundary. It takes no
+  organization id, uses the session organization, and never uses the service
+  role.
+- Phase 6 was not changed. Business instructions are stored and readable but
+  are not yet injected into any AI prompt; wiring them in is a separate
+  approved step with its own prompt-injection tests.
 
 ## Phase 8 - Production Hardening
 
@@ -484,6 +518,7 @@ counts together so a future status update can be audited.
 | 2026-08-18 | Phase 6.2 conversation state    |           323 passed |    83 passed |  Not run | Passed    | Passed, 59 warnings | Passed       | Complete                             |
 | 2026-08-18 | Phase 6.3 scheduling dialogue   |           385 passed |    87 passed |  Not run | Passed    | Passed, 63 warnings | Passed       | Complete                             |
 | 2026-08-18 | Phase 6.4 tool calling          |           438 passed |    96 passed |  Not run | Passed    | Passed, 73 warnings | Passed       | Phase 6 core complete                |
+| 2026-08-18 | Phase 7 business configuration  |           466 passed |   110 passed |  Not run | Passed    | Passed, 79 warnings | Passed       | Complete                             |
 
 Recommended commands:
 

@@ -318,6 +318,38 @@ export type Database = {
           },
         ];
       };
+      organization_receptionist_settings: {
+        Row: {
+          created_at: string;
+          faq: string | null;
+          instructions: string | null;
+          organization_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          faq?: string | null;
+          instructions?: string | null;
+          organization_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          faq?: string | null;
+          instructions?: string | null;
+          organization_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organization_receptionist_settings_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: true;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       organization_scheduling_settings: {
         Row: {
           business_hours: Json;
@@ -440,23 +472,35 @@ export type Database = {
       };
       organizations: {
         Row: {
+          address: string | null;
           created_at: string;
+          description: string | null;
           id: string;
           name: string;
+          public_email: string | null;
+          public_phone: string | null;
           slug: string;
           updated_at: string;
         };
         Insert: {
+          address?: string | null;
           created_at?: string;
+          description?: string | null;
           id?: string;
           name: string;
+          public_email?: string | null;
+          public_phone?: string | null;
           slug: string;
           updated_at?: string;
         };
         Update: {
+          address?: string | null;
           created_at?: string;
+          description?: string | null;
           id?: string;
           name?: string;
+          public_email?: string | null;
+          public_phone?: string | null;
           slug?: string;
           updated_at?: string;
         };
@@ -589,9 +633,13 @@ export type Database = {
       create_organization: {
         Args: { organization_name: string; organization_slug: string };
         Returns: {
+          address: string | null;
           created_at: string;
+          description: string | null;
           id: string;
           name: string;
+          public_email: string | null;
+          public_phone: string | null;
           slug: string;
           updated_at: string;
         };
