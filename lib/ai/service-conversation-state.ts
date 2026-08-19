@@ -23,9 +23,22 @@ export async function buildConversationStateForOrganization(
   const validOrganizationId = parseDomain(idSchema, organizationId);
   const validConversationId = parseDomain(idSchema, conversationId);
 
+  console.error("whatsapp_conversation_load_start", {
+    organizationId: validOrganizationId,
+    conversationId: validConversationId,
+  });
   const conversation = await getConversationForOrganization(validOrganizationId, validConversationId);
+  console.error("whatsapp_conversation_load_success", {
+    organizationId: validOrganizationId,
+    conversationId: validConversationId,
+  });
 
   const supabase = createServiceRoleClient("whatsapp_pipeline_persistence_failed");
+
+  console.error("whatsapp_message_load_start", {
+    organizationId: validOrganizationId,
+    conversationId: validConversationId,
+  });
   const history = await supabase
     .from("messages")
     .select("id, direction, content, created_at")
@@ -34,6 +47,11 @@ export async function buildConversationStateForOrganization(
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(recentMessageLimit);
+  console.error("whatsapp_message_load_success", {
+    organizationId: validOrganizationId,
+    conversationId: validConversationId,
+    messageCount: history.data?.length ?? 0,
+  });
   if (history.error) throw mapDomainDatabaseError(history.error);
 
   const recentMessages: ConversationStateMessage[] = [...(history.data ?? [])]
@@ -49,10 +67,27 @@ export async function buildConversationStateForOrganization(
     .reverse()
     .find((message) => message.direction === "inbound");
 
+  if (latestInbound) {
+    console.error("whatsapp_intent_detection_start", {
+      organizationId: validOrganizationId,
+      conversationId: validConversationId,
+      messageLength: latestInbound.content.length,
+    });
+  }
+
   const intent: { intent: Intent; requiresClarification: boolean; reason: IntentReason } =
     latestInbound
       ? await detectIntent({ messageText: latestInbound.content })
       : unknownResult("no_inbound_message");
+
+  if (latestInbound) {
+    console.error("whatsapp_intent_detection_success", {
+      organizationId: validOrganizationId,
+      conversationId: validConversationId,
+      detectedIntent: intent.intent,
+      reason: intent.reason,
+    });
+  }
 
   if (conversation.channel !== "whatsapp" || !conversation.whatsapp_config_id) {
     throw new DomainError("whatsapp_conversation_invalid", "The conversation is not a WhatsApp conversation.");
