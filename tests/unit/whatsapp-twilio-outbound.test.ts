@@ -28,6 +28,7 @@ function response(status: number, body: unknown): Response {
 
 describe("sendTwilioSandboxText", () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     config.value = {
       configId: "config-1",
       organizationId: "organization-1",
@@ -85,13 +86,68 @@ describe("sendTwilioSandboxText", () => {
     ).rejects.toMatchObject({ code: "whatsapp_configuration_unavailable" });
   });
 
-  it("never leaks the auth token in a provider-rejection error", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => response(400, { message: "bad request" })));
-    const error = await sendTwilioSandboxText({
+  it("logs safe Twilio rejection diagnostics without request secrets or content", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const twilioMessage = [
+      "Invalid destination",
+      "fake-twilio-auth-token",
+      "ACfaketestaccountsid",
+      "+14155238886",
+      "+14155550123",
+      "Sensitive message body",
+    ].join(" ");
+    vi.stubGlobal("fetch", vi.fn(async () => response(400, { code: 63016, message: twilioMessage })));
+
+    await expect(sendTwilioSandboxText({
       organizationId: "organization-1",
       to: "+14155550123",
-      text: "Hello",
-    }).catch((value: unknown) => value);
-    expect((error as Error).message).not.toContain("fake-twilio-auth-token");
+      text: "Sensitive message body",
+    })).rejects.toMatchObject({
+      code: "whatsapp_provider_rejected",
+      message: "The WhatsApp provider rejected the message.",
+    });
+
+    expect(consoleError).toHaveBeenCalledWith("twilio_whatsapp_outbound_rejected", {
+      status: 400,
+      twilioCode: 63016,
+      twilioMessage:
+        "Invalid destination [REDACTED] [REDACTED] [REDACTED] [REDACTED] [REDACTED]",
+    });
+    const logged = JSON.stringify(consoleError.mock.calls);
+    expect(logged).not.toContain("fake-twilio-auth-token");
+    expect(logged).not.toContain("ACfaketestaccountsid");
+    expect(logged).not.toContain("+14155238886");
+    expect(logged).not.toContain("+14155550123");
+    expect(logged).not.toContain("Sensitive message body");
+  });
+
+  it.each([
+    [429, "whatsapp_provider_rate_limited", "The WhatsApp provider rate limited the message."],
+    [500, "whatsapp_provider_unavailable", "The WhatsApp provider is temporarily unavailable."],
+    [400, "whatsapp_provider_rejected", "The WhatsApp provider rejected the message."],
+  ])("preserves the error mapping for status %i", async (status, code, message) => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn(async () => response(status, { code: 20003, message: "Rejected" })));
+
+    await expect(
+      sendTwilioSandboxText({ organizationId: "organization-1", to: "+14155550123", text: "Hello" })
+    ).rejects.toMatchObject({ code, message });
+  });
+
+  it("preserves error handling when Twilio returns invalid JSON", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("not-json", { status: 400 })));
+
+    await expect(
+      sendTwilioSandboxText({ organizationId: "organization-1", to: "+14155550123", text: "Hello" })
+    ).rejects.toMatchObject({
+      code: "whatsapp_provider_rejected",
+      message: "The WhatsApp provider rejected the message.",
+    });
+    expect(consoleError).toHaveBeenCalledWith("twilio_whatsapp_outbound_rejected", {
+      status: 400,
+      twilioCode: undefined,
+      twilioMessage: undefined,
+    });
   });
 });

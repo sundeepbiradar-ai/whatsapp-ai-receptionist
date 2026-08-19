@@ -23,6 +23,35 @@ export type SentTwilioSandboxMessage = {
 };
 
 type TwilioSendResponse = { sid?: unknown };
+type TwilioErrorResponse = { code?: unknown; message?: unknown };
+
+async function readErrorDiagnostics(
+  response: Response,
+  sensitiveValues: string[]
+): Promise<{ twilioCode?: number; twilioMessage?: string }> {
+  try {
+    const value: unknown = await response.json();
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+    const errorResponse = value as TwilioErrorResponse;
+    const twilioCode =
+      typeof errorResponse.code === "number" && Number.isFinite(errorResponse.code)
+        ? errorResponse.code
+        : undefined;
+    let twilioMessage =
+      typeof errorResponse.message === "string" && errorResponse.message
+        ? errorResponse.message
+        : undefined;
+    for (const sensitiveValue of sensitiveValues) {
+      if (twilioMessage && sensitiveValue) {
+        twilioMessage = twilioMessage.split(sensitiveValue).join("[REDACTED]");
+      }
+    }
+    return { twilioCode, twilioMessage };
+  } catch {
+    return {};
+  }
+}
 
 function validateInput(input: SendTwilioSandboxTextInput): {
   organizationId: string;
@@ -114,6 +143,18 @@ export async function sendTwilioSandboxText(
   }
 
   if (!response.ok) {
+    const diagnostics = await readErrorDiagnostics(response, [
+      authToken,
+      accountSid,
+      config.phoneNumberId,
+      to,
+      text,
+    ]);
+    console.error("twilio_whatsapp_outbound_rejected", {
+      status: response.status,
+      twilioCode: diagnostics.twilioCode,
+      twilioMessage: diagnostics.twilioMessage,
+    });
     if (response.status === 429) {
       throw new WhatsAppProviderError(
         "whatsapp_provider_rate_limited",
