@@ -9,7 +9,7 @@ const signaturePattern = /^sha256=([0-9a-f]{64})$/i;
 
 export type WhatsAppInboundMessageEvent = {
   kind: "message";
-  provider: "meta_whatsapp_cloud";
+  provider: "meta_whatsapp_cloud" | "twilio_whatsapp_sandbox";
   organizationId: string;
   configId: string;
   phoneNumberId: string;

@@ -6,7 +6,16 @@ import { DomainError } from "@/lib/domain/errors";
 import type { Database, Json } from "@/lib/supabase/database";
 
 export const metaWhatsAppProvider = "meta_whatsapp_cloud" as const;
-export type WhatsAppProvider = typeof metaWhatsAppProvider;
+export const twilioWhatsAppSandboxProvider = "twilio_whatsapp_sandbox" as const;
+export type WhatsAppProvider = typeof metaWhatsAppProvider | typeof twilioWhatsAppSandboxProvider;
+const allowedWhatsAppProviders = new Set<WhatsAppProvider>([
+  metaWhatsAppProvider,
+  twilioWhatsAppSandboxProvider,
+]);
+
+function isWhatsAppProvider(value: unknown): value is WhatsAppProvider {
+  return typeof value === "string" && allowedWhatsAppProviders.has(value as WhatsAppProvider);
+}
 
 export type ResolvedWhatsAppConfig = {
   configId: string;
@@ -67,7 +76,7 @@ function parseResolvedConfig(value: Json): ResolvedWhatsAppConfig {
   if (
     typeof config.config_id !== "string" ||
     typeof config.organization_id !== "string" ||
-    config.provider !== metaWhatsAppProvider ||
+    !isWhatsAppProvider(config.provider) ||
     typeof config.phone_number_id !== "string" ||
     typeof config.business_account_id !== "string" ||
     typeof config.access_token !== "string" ||
@@ -83,7 +92,7 @@ function parseResolvedConfig(value: Json): ResolvedWhatsAppConfig {
   return {
     configId: config.config_id,
     organizationId: config.organization_id,
-    provider: metaWhatsAppProvider,
+    provider: config.provider,
     phoneNumberId: config.phone_number_id,
     businessAccountId: config.business_account_id,
     displayPhoneNumber: config.display_phone_number ?? null,
@@ -104,7 +113,7 @@ function parseResolvedVerificationConfig(value: Json): ResolvedWhatsAppVerificat
   if (
     typeof config.config_id !== "string" ||
     typeof config.organization_id !== "string" ||
-    config.provider !== metaWhatsAppProvider ||
+    !isWhatsAppProvider(config.provider) ||
     typeof config.phone_number_id !== "string" ||
     typeof config.business_account_id !== "string" ||
     (config.display_phone_number !== null && typeof config.display_phone_number !== "string")
@@ -117,7 +126,7 @@ function parseResolvedVerificationConfig(value: Json): ResolvedWhatsAppVerificat
   return {
     configId: config.config_id,
     organizationId: config.organization_id,
-    provider: metaWhatsAppProvider,
+    provider: config.provider,
     phoneNumberId: config.phone_number_id,
     businessAccountId: config.business_account_id,
     displayPhoneNumber: config.display_phone_number ?? null,

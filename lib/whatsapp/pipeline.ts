@@ -41,7 +41,7 @@ function serviceRoleClient(): SupabaseClient<Database> {
 function validEvent(event: WhatsAppInboundMessageEvent): boolean {
   return (
     event.kind === "message" &&
-    event.provider === "meta_whatsapp_cloud" &&
+    (event.provider === "meta_whatsapp_cloud" || event.provider === "twilio_whatsapp_sandbox") &&
     Boolean(event.organizationId) &&
     Boolean(event.configId) &&
     Boolean(event.phoneNumberId) &&
