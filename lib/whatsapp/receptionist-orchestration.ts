@@ -25,28 +25,114 @@ export type ReceptionistOrchestrationResult =
 async function runOrchestration(
   input: ReceptionistOrchestrationInput
 ): Promise<ReceptionistOrchestrationResult> {
-  const conversationState = await buildConversationStateForOrganization(
-    input.organizationId,
-    input.conversationId
-  );
-  const plan = await planSchedulingConversationForOrganization(input.organizationId, conversationState);
-  const toolResult = await executeSchedulingToolForOrganization(input.organizationId, {
-    conversationState,
-    plan,
-  });
-  const receptionistContext = await getReceptionistContextForOrganization(input.organizationId);
-  const replyText = await generateReceptionistReply({
-    organizationName: receptionistContext.organizationName,
-    instructions: receptionistContext.instructions,
-    faq: receptionistContext.faq,
-    conversationState,
-    plan,
-    toolResult,
-  });
+  try {
+    console.error("whatsapp_orchestration_stage", {
+      stage: "conversation_state_start",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+    });
+    const conversationState = await buildConversationStateForOrganization(
+      input.organizationId,
+      input.conversationId
+    );
+    console.error("whatsapp_orchestration_stage", {
+      stage: "conversation_state_success",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+    });
 
-  const sent = await input.sendReply(replyText);
-  await input.recordReply({ text: replyText, providerMessageId: sent.providerMessageId });
-  return { replied: true, providerMessageId: sent.providerMessageId };
+    console.error("whatsapp_orchestration_stage", {
+      stage: "scheduling_plan_start",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+    });
+    const plan = await planSchedulingConversationForOrganization(input.organizationId, conversationState);
+    console.error("whatsapp_orchestration_stage", {
+      stage: "scheduling_plan_success",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+    });
+
+    console.error("whatsapp_orchestration_stage", {
+      stage: "scheduling_tool_start",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+    });
+    const toolResult = await executeSchedulingToolForOrganization(input.organizationId, {
+      conversationState,
+      plan,
+    });
+    console.error("whatsapp_orchestration_stage", {
+      stage: "scheduling_tool_success",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+    });
+
+    console.error("whatsapp_orchestration_stage", {
+      stage: "receptionist_context_start",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+    });
+    const receptionistContext = await getReceptionistContextForOrganization(input.organizationId);
+    console.error("whatsapp_orchestration_stage", {
+      stage: "receptionist_context_success",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+    });
+
+    console.error("whatsapp_orchestration_stage", {
+      stage: "reply_generation_start",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+    });
+    const replyText = await generateReceptionistReply({
+      organizationName: receptionistContext.organizationName,
+      instructions: receptionistContext.instructions,
+      faq: receptionistContext.faq,
+      conversationState,
+      plan,
+      toolResult,
+    });
+    console.error("whatsapp_orchestration_stage", {
+      stage: "reply_generation_success",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+    });
+
+    console.error("whatsapp_orchestration_stage", {
+      stage: "outbound_send_start",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+    });
+    const sent = await input.sendReply(replyText);
+    console.error("whatsapp_orchestration_stage", {
+      stage: "outbound_send_success",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+    });
+
+    console.error("whatsapp_orchestration_stage", {
+      stage: "outbound_record_start",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+    });
+    await input.recordReply({ text: replyText, providerMessageId: sent.providerMessageId });
+    console.error("whatsapp_orchestration_stage", {
+      stage: "outbound_record_success",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+    });
+
+    return { replied: true, providerMessageId: sent.providerMessageId };
+  } catch (error) {
+    console.error("whatsapp_orchestration_stage", {
+      stage: "orchestration_failed",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
 
 /**
@@ -65,11 +151,25 @@ export async function runReceptionistOrchestration(
   const timeoutMs = input.timeoutMs ?? defaultOrchestrationTimeoutMs;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<ReceptionistOrchestrationResult>((resolve) => {
-    timer = setTimeout(() => resolve({ replied: false, reason: "orchestration_timeout" }), timeoutMs);
+    timer = setTimeout(() => {
+      console.error("whatsapp_orchestration_stage", {
+        stage: "orchestration_timeout",
+        organizationId: input.organizationId,
+        conversationId: input.conversationId,
+        timeoutMs,
+      });
+      resolve({ replied: false, reason: "orchestration_timeout" });
+    }, timeoutMs);
   });
   try {
     return await Promise.race([runOrchestration(input), timeout]);
-  } catch {
+  } catch (error) {
+    console.error("whatsapp_orchestration_stage", {
+      stage: "orchestration_failed",
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
     return { replied: false, reason: "orchestration_failed" };
   } finally {
     if (timer) clearTimeout(timer);

@@ -88,7 +88,7 @@ export async function POST(request: Request): Promise<Response> {
   // message.
   if (!pipelineResult.duplicate) {
     try {
-      await runReceptionistOrchestration({
+      const orchestrationResult = await runReceptionistOrchestration({
         organizationId: config.organizationId,
         conversationId: pipelineResult.conversationId,
         sendReply: async (text) => {
@@ -108,6 +108,14 @@ export async function POST(request: Request): Promise<Response> {
           });
         },
       });
+
+      if (!orchestrationResult.replied) {
+        console.error("whatsapp_orchestration_failed", {
+          reason: orchestrationResult.reason,
+          organizationId: config.organizationId,
+          conversationId: pipelineResult.conversationId,
+        });
+      }
     } catch {
       // The inbound message is already durably persisted; a reply failure is
       // logged upstream by each adapter and must not surface as a webhook

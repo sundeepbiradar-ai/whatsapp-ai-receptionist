@@ -177,14 +177,74 @@ describe("Twilio WhatsApp sandbox webhook route", () => {
   });
 
   it("still acknowledges Twilio (no retry) when persistence succeeds but orchestration fails", async () => {
-    const { runReceptionistOrchestration } = await import("@/lib/whatsapp/receptionist-orchestration");
-    vi.mocked(runReceptionistOrchestration).mockRejectedValueOnce(new Error("ai down"));
-    const { POST } = await import("@/app/api/whatsapp/twilio/webhook/route");
-    const signature = computeTwilioSignature(webhookUrl, validParams, authToken);
-    const response = await POST(requestFor(validParams, webhookUrl, signature));
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { runReceptionistOrchestration } = await import("@/lib/whatsapp/receptionist-orchestration");
+      vi.mocked(runReceptionistOrchestration).mockRejectedValueOnce(new Error("ai down"));
+      const { POST } = await import("@/app/api/whatsapp/twilio/webhook/route");
+      const signature = computeTwilioSignature(webhookUrl, validParams, authToken);
+      const response = await POST(requestFor(validParams, webhookUrl, signature));
 
-    expect(response.status).toBe(200);
-    expect(pipeline.calls).toHaveLength(1);
+      expect(response.status).toBe(200);
+      expect(pipeline.calls).toHaveLength(1);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("logs orchestration failure with only safe metadata (no secrets)", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { runReceptionistOrchestration } = await import("@/lib/whatsapp/receptionist-orchestration");
+      vi.mocked(runReceptionistOrchestration).mockResolvedValueOnce({
+        replied: false,
+        reason: "orchestration_timeout",
+      });
+      const { POST } = await import("@/app/api/whatsapp/twilio/webhook/route");
+      const signature = computeTwilioSignature(webhookUrl, validParams, authToken);
+      const response = await POST(requestFor(validParams, webhookUrl, signature));
+
+      expect(response.status).toBe(200);
+
+      // Verify logging occurred with safe metadata only
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "whatsapp_orchestration_failed",
+        expect.objectContaining({
+          reason: "orchestration_timeout",
+          organizationId: "organization-1",
+          conversationId: "conversation-1",
+        })
+      );
+
+      // Verify no secrets were logged
+      const allLogs = consoleErrorSpy.mock.calls.map((call) => JSON.stringify(call));
+      const logText = allLogs.join(" ");
+      expect(logText).not.toContain(authToken);
+      expect(logText).not.toContain("Hello"); // message body
+      expect(logText).not.toContain("+14155550123"); // phone number
+      expect(logText).not.toContain("ACfaketestaccountsid"); // account SID
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("does not log when orchestration succeeds", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { POST } = await import("@/app/api/whatsapp/twilio/webhook/route");
+      const signature = computeTwilioSignature(webhookUrl, validParams, authToken);
+      const response = await POST(requestFor(validParams, webhookUrl, signature));
+
+      expect(response.status).toBe(200);
+
+      // Verify no whatsapp_orchestration_failed logs
+      const failureLogs = consoleErrorSpy.mock.calls.filter(
+        (call) => call[0] === "whatsapp_orchestration_failed"
+      );
+      expect(failureLogs).toHaveLength(0);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   it("returns 500 for a non-duplicate pipeline persistence failure", async () => {
