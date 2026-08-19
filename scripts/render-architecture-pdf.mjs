@@ -222,4 +222,4 @@ await page.setContent(documentHtml, { waitUntil: "networkidle" });
 await page.waitForTimeout(1000);
 await page.pdf({ path: outputPath, format: "A4", printBackground: true, preferCSSPageSize: true });
 await browser.close();
-console.log(outputPath);
+globalThis.console.log(outputPath);
