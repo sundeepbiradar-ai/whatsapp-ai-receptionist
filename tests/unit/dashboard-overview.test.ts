@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
-import { getRecentConversations, getUpcomingAppointments } from '@/lib/dashboard/overview';
+import {
+  getDayBoundsInTimezone,
+  getOpenConversations,
+  getRecentConversations,
+  getUpcomingAppointments,
+} from '@/lib/dashboard/overview';
 import type { Database } from '@/lib/supabase/database';
 
 type Conversation = Database['public']['Tables']['conversations']['Row'];
 type Appointment = Database['public']['Tables']['appointments']['Row'];
 
-const conversation = (id: string): Conversation => ({
+const conversation = (id: string, status: Conversation['status'] = 'open'): Conversation => ({
   id,
   organization_id: 'organization-id',
   contact_id: `contact-${id}`,
-  status: 'open',
+  status,
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
   last_message_at: null,
@@ -46,5 +51,31 @@ describe('dashboard overview selectors', () => {
     ], now);
 
     expect(result.map((item) => item.id)).toEqual(['future']);
+  });
+
+  it('keeps only open conversations', () => {
+    const result = getOpenConversations([
+      conversation('1', 'open'),
+      conversation('2', 'closed'),
+      conversation('3', 'open'),
+    ]);
+
+    expect(result.map((item) => item.id)).toEqual(['1', '3']);
+  });
+
+  it('computes day bounds in UTC', () => {
+    const bounds = getDayBoundsInTimezone('UTC', new Date('2026-08-21T15:30:00.000Z'));
+
+    expect(bounds).toEqual({ startsAtFrom: '2026-08-21T00:00:00.000Z', startsAtTo: '2026-08-22T00:00:00.000Z' });
+  });
+
+  it('computes day bounds in the organization timezone', () => {
+    const bounds = getDayBoundsInTimezone('Asia/Kolkata', new Date('2026-08-21T15:30:00.000Z'));
+
+    expect(bounds).toEqual({ startsAtFrom: '2026-08-20T18:30:00.000Z', startsAtTo: '2026-08-21T18:30:00.000Z' });
+  });
+
+  it('returns null day bounds for an invalid timezone', () => {
+    expect(getDayBoundsInTimezone('not-a-timezone', new Date('2026-08-21T15:30:00.000Z'))).toBeNull();
   });
 });
