@@ -199,6 +199,7 @@ export type Database = {
           organization_id: string;
           provider: string | null;
           provider_message_id: string | null;
+          source_inbound_message_id: string | null;
         };
         Insert: {
           content: string;
@@ -213,6 +214,7 @@ export type Database = {
           organization_id: string;
           provider?: string | null;
           provider_message_id?: string | null;
+          source_inbound_message_id?: string | null;
         };
         Update: {
           content?: string;
@@ -227,6 +229,7 @@ export type Database = {
           organization_id?: string;
           provider?: string | null;
           provider_message_id?: string | null;
+          source_inbound_message_id?: string | null;
         };
         Relationships: [
           {
@@ -524,6 +527,76 @@ export type Database = {
         };
         Relationships: [];
       };
+      whatsapp_ai_jobs: {
+        Row: {
+          attempt_count: number;
+          claim_expires_at: string | null;
+          claimed_at: string | null;
+          conversation_id: string;
+          created_at: string;
+          id: string;
+          inbound_message_id: string;
+          last_error_code: string | null;
+          max_attempts: number;
+          next_attempt_at: string;
+          organization_id: string;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          attempt_count?: number;
+          claim_expires_at?: string | null;
+          claimed_at?: string | null;
+          conversation_id: string;
+          created_at?: string;
+          id?: string;
+          inbound_message_id: string;
+          last_error_code?: string | null;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          organization_id: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          attempt_count?: number;
+          claim_expires_at?: string | null;
+          claimed_at?: string | null;
+          conversation_id?: string;
+          created_at?: string;
+          id?: string;
+          inbound_message_id?: string;
+          last_error_code?: string | null;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          organization_id?: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_ai_jobs_inbound_fk";
+            columns: ["organization_id", "inbound_message_id"];
+            isOneToOne: false;
+            referencedRelation: "messages";
+            referencedColumns: ["organization_id", "id"];
+          },
+          {
+            foreignKeyName: "whatsapp_ai_jobs_conversation_fk";
+            columns: ["organization_id", "conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "conversations";
+            referencedColumns: ["organization_id", "id"];
+          },
+          {
+            foreignKeyName: "whatsapp_ai_jobs_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       whatsapp_send_jobs: {
         Row: {
           attempt_count: number;
@@ -626,8 +699,16 @@ export type Database = {
         Args: { target_batch_size?: number };
         Returns: Json;
       };
+      claim_whatsapp_ai_jobs: {
+        Args: { target_batch_size?: number };
+        Returns: Json;
+      };
       complete_whatsapp_send_job: {
         Args: { target_job_id: string; target_provider_message_id: string };
+        Returns: Json;
+      };
+      complete_whatsapp_ai_job: {
+        Args: { target_job_id: string };
         Returns: Json;
       };
       create_organization: {
@@ -660,6 +741,14 @@ export type Database = {
         };
         Returns: Json;
       };
+      enqueue_whatsapp_ai_job: {
+        Args: {
+          target_conversation_id: string;
+          target_inbound_message_id: string;
+          target_organization_id: string;
+        };
+        Returns: Json;
+      };
       invoke_whatsapp_retry_worker: { Args: never; Returns: undefined };
       is_organization_admin: {
         Args: { target_organization_id: string; target_user_id?: string };
@@ -686,11 +775,31 @@ export type Database = {
         };
         Returns: Json;
       };
+      process_inbound_meta_message_with_ai_job: {
+        Args: {
+          target_content: string;
+          target_created_at: string;
+          target_organization_id: string;
+          target_provider_message_id: string;
+          target_sender_phone: string;
+          target_whatsapp_config_id: string;
+        };
+        Returns: Json;
+      };
       reap_whatsapp_send_job_claims: { Args: never; Returns: Json };
+      reap_whatsapp_ai_job_claims: { Args: never; Returns: Json };
       reschedule_whatsapp_send_job: {
         Args: {
           target_error_code: string;
           target_error_message?: string;
+          target_job_id: string;
+          target_next_attempt_at: string;
+        };
+        Returns: Json;
+      };
+      reschedule_whatsapp_ai_job: {
+        Args: {
+          target_error_code: string;
           target_job_id: string;
           target_next_attempt_at: string;
         };

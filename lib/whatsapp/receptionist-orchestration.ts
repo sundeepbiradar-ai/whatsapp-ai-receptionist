@@ -139,9 +139,9 @@ async function runOrchestration(
  * Provider-agnostic inbound-to-reply orchestration: build conversation state
  * -> plan -> execute an approved scheduling tool if ready -> generate a
  * bounded, safety-constrained receptionist reply -> send it through the
- * caller-supplied outbound adapter -> record it. Intended for reuse by a
- * future Meta background worker; the Meta webhook route itself is not wired
- * to this in this change. Bounded by an overall timeout so a slow AI or
+ * caller-supplied outbound adapter -> record it. Called by the durable Meta
+ * AI worker; the webhook only persists and queues inbound work. Bounded by an
+ * overall timeout so a slow AI or
  * provider call cannot hang the caller indefinitely; on timeout or any
  * unexpected failure, no reply is sent and the caller is told so safely.
  */

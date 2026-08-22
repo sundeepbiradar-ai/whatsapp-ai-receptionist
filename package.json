@@ -13,7 +13,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
-    "test:integration": "vitest --run tests/integration/rls.test.ts tests/integration/domain.test.ts tests/integration/scheduling.test.ts tests/integration/whatsapp-configuration.test.ts tests/integration/conversation-schema.test.ts tests/integration/whatsapp-pipeline.test.ts tests/integration/whatsapp-reliability.test.ts tests/integration/whatsapp-retry.test.ts tests/integration/conversation-state.test.ts tests/integration/scheduling-conversation.test.ts tests/integration/scheduling-tools.test.ts tests/integration/business-configuration.test.ts tests/integration/security-posture.test.ts tests/integration/whatsapp-meta-harness.test.ts",
+    "test:integration": "vitest --run tests/integration/rls.test.ts tests/integration/domain.test.ts tests/integration/scheduling.test.ts tests/integration/whatsapp-configuration.test.ts tests/integration/conversation-schema.test.ts tests/integration/whatsapp-pipeline.test.ts tests/integration/whatsapp-reliability.test.ts tests/integration/whatsapp-retry.test.ts tests/integration/whatsapp-ai-jobs.test.ts tests/integration/conversation-state.test.ts tests/integration/scheduling-conversation.test.ts tests/integration/scheduling-tools.test.ts tests/integration/business-configuration.test.ts tests/integration/security-posture.test.ts tests/integration/whatsapp-meta-harness.test.ts",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",

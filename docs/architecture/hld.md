@@ -106,7 +106,8 @@ Supabase PostgreSQL stores all durable records and enforces RLS, constraints, fo
 4. A verified inbound text event is normalized.
 5. The pipeline resolves or creates the organization-scoped contact and open conversation.
 6. The inbound message is inserted once using provider-message idempotency.
-7. AI behavior may derive state and a scheduling plan, but the current release stops at structured tool results and does not generate a reply.
+7. A fresh supported Meta inbound message creates one durable AI-processing job and the webhook acknowledges without waiting for model or provider work.
+8. The worker runs shared orchestration; outbound replies use the durable reserve/send/correlate path and the existing delivery retry worker.
 
 ### Outbound and retry journey
 

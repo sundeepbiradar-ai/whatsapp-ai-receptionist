@@ -257,13 +257,13 @@ describe("Twilio WhatsApp sandbox webhook route", () => {
 });
 
 describe("Meta webhook regression", () => {
-  it("the Meta webhook route is not modified to reference Twilio or the new orchestration helper", () => {
+  it("the Meta webhook route stays Meta-focused and queues work for the worker", () => {
     const source = readFileSync(
       resolve(process.cwd(), "app/api/whatsapp/webhook/route.ts"),
       "utf8"
     );
-    expect(source).not.toContain("twilio");
-    expect(source).not.toContain("Twilio");
-    expect(source).not.toContain("receptionist-orchestration");
+    expect(source).toContain("meta_whatsapp_cloud");
+    expect(source).toContain("processInboundWhatsAppMessage");
+    expect(source).not.toContain("twilio_whatsapp_sandbox");
   });
 });

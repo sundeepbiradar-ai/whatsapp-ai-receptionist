@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { runWhatsAppRetryWorker, verifyRetryWorkerAuthorization } from "@/lib/whatsapp/retry";
+import { runWhatsAppAiWorker } from "@/lib/whatsapp/ai-worker";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +11,9 @@ export async function POST(request: Request): Promise<Response> {
     return new Response("Forbidden.", { status: 403 });
   }
   try {
-    const result = await runWhatsAppRetryWorker();
-    return NextResponse.json(result, { status: 200 });
+    const ai = await runWhatsAppAiWorker();
+    const delivery = await runWhatsAppRetryWorker();
+    return NextResponse.json({ ai, delivery }, { status: 200 });
   } catch {
     return new Response("WhatsApp retry worker failed.", { status: 500 });
   }

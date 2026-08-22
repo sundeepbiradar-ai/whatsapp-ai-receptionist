@@ -9,7 +9,7 @@ import { idSchema, messageCreateSchema, parseDomain, type MessageCreateInput } f
 type Message = Database['public']['Tables']['messages']['Row'];
 
 const messageColumns =
-  'id, organization_id, conversation_id, direction, content, provider, provider_message_id, delivery_status, delivery_status_at, delivery_error_code, delivery_error_message, created_at';
+  'id, organization_id, conversation_id, direction, content, provider, provider_message_id, delivery_status, delivery_status_at, delivery_error_code, delivery_error_message, source_inbound_message_id, created_at';
 
 export async function listMessages(conversationId: string): Promise<Message[]> {
   const context = await requireDomainOrganization();

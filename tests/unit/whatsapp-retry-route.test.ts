@@ -27,6 +27,9 @@ vi.mock("@/lib/whatsapp/retry", async () => {
     }),
   };
 });
+vi.mock("@/lib/whatsapp/ai-worker", () => ({
+  runWhatsAppAiWorker: vi.fn(async () => ({ claimed: 0, completed: 0, rescheduled: 0, dead: 0 })),
+}));
 
 function request(headers?: Record<string, string>): Request {
   return new Request("http://localhost/api/internal/whatsapp/retry", {
@@ -46,7 +49,7 @@ describe("internal WhatsApp retry route", () => {
     const { POST } = await import("@/app/api/internal/whatsapp/retry/route");
     const response = await POST(request({ authorization: "Bearer worker-secret-value" }));
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ claimed: 1, completed: 1 });
+    expect(await response.json()).toMatchObject({ delivery: { claimed: 1, completed: 1 } });
     expect(worker.calls).toBe(1);
   });
 

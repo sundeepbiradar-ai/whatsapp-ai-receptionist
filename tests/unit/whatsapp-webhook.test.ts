@@ -32,7 +32,10 @@ const config = vi.hoisted(() => ({
     displayPhoneNumber: string | null;
   } | null,
 }));
-const pipeline = vi.hoisted(() => ({ calls: [] as unknown[] }));
+const pipeline = vi.hoisted(() => ({ calls: [] as unknown[], duplicate: false }));
+const orchestration = vi.hoisted(() => ({ calls: [] as unknown[] }));
+const outbound = vi.hoisted(() => ({ calls: [] as unknown[] }));
+const recordedOutbound = vi.hoisted(() => ({ calls: [] as unknown[] }));
 const reliability = vi.hoisted(() => ({
   calls: [] as unknown[],
   outcome: "applied" as string,
@@ -51,7 +54,41 @@ vi.mock("@/lib/whatsapp/configuration", () => ({
 vi.mock("@/lib/whatsapp/pipeline", () => ({
   processInboundWhatsAppMessage: vi.fn(async (event: unknown) => {
     pipeline.calls.push(event);
-    return { duplicate: false };
+    return {
+      organizationId: "organization-1",
+      contactId: "contact-1",
+      conversationId: "conversation-1",
+      messageId: "message-1",
+      providerMessageId: "wamid-route-1",
+      duplicate: pipeline.duplicate,
+    };
+  }),
+}));
+vi.mock("@/lib/whatsapp/receptionist-orchestration", () => ({
+  runReceptionistOrchestration: vi.fn(async (input: {
+    sendReply: (text: string) => Promise<{ providerMessageId: string }>;
+    recordReply: (input: { text: string; providerMessageId: string }) => Promise<void>;
+  }) => {
+    orchestration.calls.push(input);
+    const sent = await input.sendReply("Hello from the receptionist");
+    await input.recordReply({ text: "Hello from the receptionist", providerMessageId: sent.providerMessageId });
+    return { replied: true, providerMessageId: sent.providerMessageId };
+  }),
+}));
+vi.mock("@/lib/whatsapp/outbound", () => ({
+  sendWhatsAppText: vi.fn(async (input: unknown) => {
+    outbound.calls.push(input);
+    return {
+      provider: "meta_whatsapp_cloud",
+      providerMessageId: "wamid.reply-1",
+      recipient: "+14155550123",
+    };
+  }),
+}));
+vi.mock("@/lib/domain/messages/service-repository", () => ({
+  recordOutboundMetaReply: vi.fn(async (input: unknown) => {
+    recordedOutbound.calls.push(input);
+    return { messageId: "outbound-message-1" };
   }),
 }));
 vi.mock("@/lib/whatsapp/reliability", () => ({
@@ -322,6 +359,10 @@ describe("WhatsApp webhook security helpers", () => {
 describe("WhatsApp webhook route", () => {
   beforeEach(() => {
     pipeline.calls = [];
+    pipeline.duplicate = false;
+    orchestration.calls = [];
+    outbound.calls = [];
+    recordedOutbound.calls = [];
     config.byPhone = {
       configId: "config-1",
       organizationId: "organization-1",
@@ -341,6 +382,23 @@ describe("WhatsApp webhook route", () => {
       businessAccountId: "business-1",
       displayPhoneNumber: null,
     };
+  });
+
+  it("acknowledges a fresh inbound message without waiting for AI or provider delivery", async () => {
+    const { POST } = await import("@/app/api/whatsapp/webhook/route");
+    const response = await POST(
+      request(
+        "POST",
+        textPayload,
+        { "content-type": "application/json", "x-hub-signature-256": signedBody(textPayload, "fake-app-secret") }
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(pipeline.calls).toHaveLength(1);
+    expect(orchestration.calls).toHaveLength(0);
+    expect(outbound.calls).toHaveLength(0);
+    expect(recordedOutbound.calls).toHaveLength(0);
   });
 
   it("returns the exact challenge for valid subscription verification", async () => {

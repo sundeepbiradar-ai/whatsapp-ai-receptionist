@@ -77,8 +77,11 @@ export async function POST(request: Request): Promise<Response> {
 
     const events = normalizeMetaWebhookEvents(payload, config);
     for (const event of events) {
-      if (event.kind === "message") await processInboundWhatsAppMessage(event);
-      else await applyWhatsAppStatusEvent(event);
+      if (event.kind === "message") {
+        await processInboundWhatsAppMessage(event);
+      } else {
+        await applyWhatsAppStatusEvent(event);
+      }
     }
 
     return NextResponse.json({ received: true }, { status: 200 });

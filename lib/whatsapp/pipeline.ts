@@ -119,7 +119,11 @@ export async function processInboundWhatsAppMessage(
       "The WhatsApp message event is invalid."
     );
   }
-  const { data, error } = await serviceRoleClient().rpc("process_inbound_whatsapp_message", {
+  const supabase = serviceRoleClient();
+  const rpcName = event.provider === "meta_whatsapp_cloud"
+    ? "process_inbound_meta_message_with_ai_job"
+    : "process_inbound_whatsapp_message";
+  const { data, error } = await supabase.rpc(rpcName, {
     target_organization_id: event.organizationId,
     target_whatsapp_config_id: event.configId,
     target_sender_phone: event.senderPhone,

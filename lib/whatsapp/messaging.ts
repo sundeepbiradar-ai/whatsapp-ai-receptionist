@@ -4,6 +4,7 @@ import { requireDomainOrganization } from "@/lib/domain/context";
 import { DomainError, mapDomainDatabaseError } from "@/lib/domain/errors";
 import { idSchema, parseDomain } from "@/lib/domain/validation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { metaWhatsAppProvider } from "@/lib/whatsapp/configuration";
 import {
   classifyWhatsAppFailure,
@@ -17,6 +18,8 @@ export type SendWhatsAppConversationMessageInput = {
   conversationId: string;
   text: string;
   random?: () => number;
+  organizationId?: string;
+  sourceInboundMessageId?: string;
 };
 
 export type SendWhatsAppConversationMessageResult = {
@@ -48,15 +51,23 @@ function failureFrom(error: unknown): WhatsAppSendFailure {
 export async function sendWhatsAppConversationMessage(
   input: SendWhatsAppConversationMessageInput
 ): Promise<SendWhatsAppConversationMessageResult> {
-  const context = await requireDomainOrganization();
-  const organizationId = context.currentOrganization.id;
+  const context = input.organizationId ? null : await requireDomainOrganization();
+  const organizationId = input.organizationId ?? context?.currentOrganization.id ?? "";
+  if (!organizationId) {
+    throw new DomainError(
+      "whatsapp_configuration_unavailable",
+      "WhatsApp provider configuration is unavailable."
+    );
+  }
   const conversationId = parseDomain(idSchema, input.conversationId);
   const text = input.text.trim();
   if (!text || text.length > maxTextLength) {
     throw new DomainError("whatsapp_message_invalid", "The WhatsApp message text is invalid.");
   }
 
-  const supabase = await createServerSupabaseClient();
+  const supabase = input.organizationId
+    ? createServiceRoleClient("whatsapp_pipeline_persistence_failed")
+    : await createServerSupabaseClient();
   const conversation = await supabase
     .from("conversations")
     .select("id, contact_id, channel, whatsapp_config_id")
@@ -83,21 +94,69 @@ export async function sendWhatsAppConversationMessage(
     throw new DomainError("whatsapp_destination_invalid", "The WhatsApp destination is invalid.");
   }
 
-  const reserved = await supabase
-    .from("messages")
-    .insert({
-      organization_id: organizationId,
-      conversation_id: conversationId,
-      direction: "outbound",
-      content: text,
-      provider: metaWhatsAppProvider,
-      delivery_status: "pending",
-      delivery_status_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
-  if (reserved.error) throw mapDomainDatabaseError(reserved.error);
-  const messageId = reserved.data.id;
+  let messageId: string;
+  if (input.sourceInboundMessageId) {
+    const existing = await supabase
+      .from("messages")
+      .select("id, delivery_status, provider_message_id")
+      .eq("organization_id", organizationId)
+      .eq("source_inbound_message_id", input.sourceInboundMessageId)
+      .maybeSingle();
+    if (existing.error) throw mapDomainDatabaseError(existing.error);
+    if (existing.data) {
+      if (existing.data.delivery_status === "sent" && existing.data.provider_message_id) {
+        return { messageId: existing.data.id, conversationId, providerMessageId: existing.data.provider_message_id, deliveryStatus: "sent" };
+      }
+      if (existing.data.delivery_status === "failed" || existing.data.delivery_status === "unconfirmed") {
+        throw new DomainError("whatsapp_message_unconfirmed", "The WhatsApp message cannot be sent again.");
+      }
+      const liveJob = await supabase
+        .from("whatsapp_send_jobs")
+        .select("id")
+        .eq("organization_id", organizationId)
+        .eq("message_id", existing.data.id)
+        .in("status", ["pending", "processing"])
+        .maybeSingle();
+      if (liveJob.error) throw mapDomainDatabaseError(liveJob.error);
+      if (liveJob.data) {
+        throw new DomainError("whatsapp_message_unconfirmed", "The WhatsApp message is already scheduled.");
+      }
+      messageId = existing.data.id;
+    } else {
+      const reserved = await supabase
+        .from("messages")
+        .insert({
+          organization_id: organizationId,
+          conversation_id: conversationId,
+          direction: "outbound",
+          content: text,
+          provider: metaWhatsAppProvider,
+          delivery_status: "pending",
+          delivery_status_at: new Date().toISOString(),
+          source_inbound_message_id: input.sourceInboundMessageId,
+        })
+        .select("id")
+        .single();
+      if (reserved.error) throw mapDomainDatabaseError(reserved.error);
+      messageId = reserved.data.id;
+    }
+  } else {
+    const reserved = await supabase
+      .from("messages")
+      .insert({
+        organization_id: organizationId,
+        conversation_id: conversationId,
+        direction: "outbound",
+        content: text,
+        provider: metaWhatsAppProvider,
+        delivery_status: "pending",
+        delivery_status_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    if (reserved.error) throw mapDomainDatabaseError(reserved.error);
+    messageId = reserved.data.id;
+  }
 
   async function settleMessage(
     status: "failed" | "unconfirmed",

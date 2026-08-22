@@ -91,11 +91,13 @@ sequenceDiagram
         P->>D: Resolve/create open conversation
         P->>D: Insert message under provider-id uniqueness
         D-->>P: Inserted or stable duplicate result
-        P-->>W: Deterministic acknowledgement
-        W->>AI: Optional state/planning/tool boundary
-        AI-->>W: Structured result only; no generated reply
+        P->>D: Enqueue one durable Meta AI-processing job
         W-->>M: 200 acknowledgement
     end
+
+    W-->>AI: Durable worker claims the AI-processing job later
+    AI->>D: Reserve one logical outbound message
+    AI->>M: Send through the durable Meta delivery path
 ```
 
 ### Input trust rules
