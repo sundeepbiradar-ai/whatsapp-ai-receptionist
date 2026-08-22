@@ -5,6 +5,7 @@ import { DeleteContactButton } from "@/components/contacts/delete-contact-button
 import { deleteContactAction } from "@/lib/domain/contacts/actions";
 import { DomainError } from "@/lib/domain/errors";
 import { getContact } from "@/lib/domain/contacts/repository";
+import { formatPhoneForDisplay } from "@/lib/utils/phone";
 
 type ContactDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -40,7 +41,7 @@ export default async function ContactDetailPage({ params }: ContactDetailPagePro
           </div>
         </div>
         <dl className="mt-8 grid gap-4 rounded-lg border border-gray-200 bg-white p-6 sm:grid-cols-2">
-          <div><dt className="text-sm text-gray-500">Phone</dt><dd className="mt-1 font-medium text-gray-900">{contact.phone}</dd></div>
+          <div><dt className="text-sm text-gray-500">Phone</dt><dd className="mt-1 font-medium text-gray-900">{formatPhoneForDisplay(contact.phone)}</dd></div>
           <div><dt className="text-sm text-gray-500">Email</dt><dd className="mt-1 font-medium text-gray-900">{contact.email ?? "No email"}</dd></div>
           <div><dt className="text-sm text-gray-500">Created</dt><dd className="mt-1 text-gray-700">{new Date(contact.created_at).toLocaleString()}</dd></div>
           <div><dt className="text-sm text-gray-500">Updated</dt><dd className="mt-1 text-gray-700">{new Date(contact.updated_at).toLocaleString()}</dd></div>

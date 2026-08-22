@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { listContacts } from "@/lib/domain/contacts/repository";
 import { DomainError } from "@/lib/domain/errors";
+import { formatPhoneForDisplay } from "@/lib/utils/phone";
 import type { Database } from "@/lib/supabase/database";
 
 type Contact = Database["public"]["Tables"]["contacts"]["Row"];
@@ -83,23 +84,36 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps):
             {!query && <Link className="button-primary mt-5" href="/dashboard/contacts/new">Create contact</Link>}
           </section>
         ) : (
-          <section className="mt-8 overflow-hidden rounded-lg border border-gray-200 bg-white">
-            <div className="border-b border-gray-200 px-5 py-4 text-sm text-gray-600">
+          <section aria-label="Contacts" className="mt-8">
+            <p className="text-sm text-gray-600">
               {contacts.length} contact{contacts.length === 1 ? "" : "s"}
-            </div>
-            <div className="divide-y divide-gray-100">
+            </p>
+            <ul className="mt-4 space-y-3">
               {contacts.map((contact) => (
-                <Link className="block px-5 py-4 hover:bg-gray-50" href={`/dashboard/contacts/${contact.id}`} key={contact.id}>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h2 className="font-semibold text-gray-900">{contact.name}</h2>
-                      <p className="mt-1 text-sm text-gray-600">{contact.phone}</p>
+                <li key={contact.id}>
+                  <Link
+                    className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:border-primary-300 hover:shadow-md sm:p-5"
+                    href={`/dashboard/contacts/${contact.id}`}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-gray-900">{contact.name || contact.phone}</p>
+                      <p className="mt-1 truncate text-sm text-gray-600">{formatPhoneForDisplay(contact.phone)}</p>
+                      {contact.email && <p className="mt-1 truncate text-sm text-gray-500">{contact.email}</p>}
                     </div>
-                    <p className="text-sm text-gray-600">{contact.email ?? "No email"}</p>
-                  </div>
-                </Link>
+                    <svg
+                      aria-hidden="true"
+                      className="h-5 w-5 shrink-0 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </Link>
+                </li>
               ))}
-            </div>
+            </ul>
           </section>
         )}
       </div>
