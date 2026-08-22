@@ -37,9 +37,9 @@ const appointmentStatusEnum = z.enum(appointmentStatusValues);
 
 const appointmentFields = z.object({
   contactId: uuid,
-  conversationId: uuid.nullable().optional(),
-  startsAt: z.string().datetime({ offset: true }),
-  endsAt: z.string().datetime({ offset: true }),
+  conversationId: z.preprocess((value) => (value === '' ? null : value), uuid.nullable().optional()),
+  startsAt: z.string().min(1, 'Please select a start date and time.').pipe(z.string().datetime({ offset: true, message: 'Please select a start date and time.' })),
+  endsAt: z.string().min(1, 'Please select an end date and time.').pipe(z.string().datetime({ offset: true, message: 'Please select an end date and time.' })),
   status: appointmentStatusEnum,
   notes: z.string().trim().max(5000, 'Notes are too long.').nullable().optional(),
 });
@@ -91,13 +91,16 @@ export type AppointmentStatus = (typeof appointmentStatusValues)[number];
 function parseAppointment<T>(schema: z.ZodType<T>, input: unknown): T {
   const result = schema.safeParse(input);
   if (!result.success) {
-    const timeIssue = result.error.issues.some(
-      (issue) => issue.path[0] === 'endsAt' && issue.message === 'Appointment end must be later than its start.'
+    const timeCrossFieldMessage = 'Appointment end must be later than its start.';
+    const hasOwnStartsOrEndsIssue = result.error.issues.some(
+      (issue) => (issue.path[0] === 'startsAt' || issue.path[0] === 'endsAt') && issue.message !== timeCrossFieldMessage
     );
-    if (timeIssue) {
-      throw new DomainError('appointment_time_invalid', 'Appointment end must be later than its start.');
+    if (!hasOwnStartsOrEndsIssue && result.error.issues.some((issue) => issue.path[0] === 'endsAt' && issue.message === timeCrossFieldMessage)) {
+      throw new DomainError('appointment_time_invalid', timeCrossFieldMessage);
     }
-    throw new DomainError('invalid_input', result.error.issues[0]?.message ?? 'Invalid input.');
+    const firstIssue = result.error.issues.find((issue) => issue.message !== timeCrossFieldMessage) ?? result.error.issues[0];
+    const message = firstIssue?.path[0] === 'contactId' ? 'Please select a contact.' : firstIssue?.message ?? 'Invalid input.';
+    throw new DomainError('invalid_input', message);
   }
   return result.data;
 }

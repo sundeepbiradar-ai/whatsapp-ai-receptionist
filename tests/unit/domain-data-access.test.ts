@@ -42,6 +42,46 @@ describe('domain data-access validation', () => {
     expect(appointmentCreateSchema.safeParse({ contactId: '00000000-0000-0000-0000-000000000001', startsAt: '2026-01-01T11:00:00Z', endsAt: '2026-01-01T10:00:00Z' }).success).toBe(false);
   });
 
+  it('surfaces user-friendly messages for missing appointment fields instead of raw Zod errors', () => {
+    const validContactId = '33333333-3333-4333-8333-333333333333';
+
+    expect(() => parseAppointmentCreate({
+      contactId: '',
+      startsAt: '2026-01-01T10:00:00Z',
+      endsAt: '2026-01-01T11:00:00Z',
+    })).toThrowError(expect.objectContaining({ code: 'invalid_input', message: 'Please select a contact.' }));
+
+    expect(() => parseAppointmentCreate({
+      contactId: validContactId,
+      startsAt: '',
+      endsAt: '2026-01-01T11:00:00Z',
+    })).toThrowError(expect.objectContaining({ code: 'invalid_input', message: 'Please select a start date and time.' }));
+
+    expect(() => parseAppointmentCreate({
+      contactId: validContactId,
+      startsAt: '2026-01-01T10:00:00Z',
+      endsAt: '',
+    })).toThrowError(expect.objectContaining({ code: 'invalid_input', message: 'Please select an end date and time.' }));
+
+    expect(parseAppointmentCreate({
+      contactId: validContactId,
+      conversationId: '',
+      startsAt: '2026-01-01T10:00:00Z',
+      endsAt: '2026-01-01T11:00:00Z',
+    })).toEqual(expect.objectContaining({ conversationId: null }));
+
+    expect(parseAppointmentCreate({
+      contactId: validContactId,
+      startsAt: '2026-01-01T10:00:00Z',
+      endsAt: '2026-01-01T11:00:00Z',
+    })).toEqual(expect.objectContaining({
+      contactId: validContactId,
+      startsAt: '2026-01-01T10:00:00Z',
+      endsAt: '2026-01-01T11:00:00Z',
+      status: 'pending',
+    }));
+  });
+
   it('enforces appointment time policies with stable domain errors', () => {
     expect(() => assertAppointmentStartInFuture('2026-01-01T10:00:00.000Z', new Date('2026-01-01T10:00:00.000Z'))).toThrowError(
       expect.objectContaining({ code: 'appointment_past' })
