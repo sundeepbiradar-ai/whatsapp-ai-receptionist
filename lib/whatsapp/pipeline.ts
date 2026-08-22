@@ -123,15 +123,16 @@ export async function processInboundWhatsAppMessage(
   const rpcName = event.provider === "meta_whatsapp_cloud"
     ? "process_inbound_meta_message_with_ai_job"
     : "process_inbound_whatsapp_message";
-  const { data, error } = await supabase.rpc(rpcName, {
+  const argumentsForRpc = {
     target_organization_id: event.organizationId,
     target_whatsapp_config_id: event.configId,
     target_sender_phone: event.senderPhone,
     target_provider_message_id: event.providerMessageId,
     target_content: event.text,
     target_created_at: event.timestamp,
-    target_provider: event.provider,
-  });
+    ...(event.provider === "twilio_whatsapp_sandbox" ? { target_provider: event.provider } : {}),
+  };
+  const { data, error } = await supabase.rpc(rpcName, argumentsForRpc);
   if (error) {
     throw new DomainError(
       "whatsapp_pipeline_persistence_failed",

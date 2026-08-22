@@ -20,6 +20,7 @@ type Fixture = {
   organizationId: string;
   otherOrganizationId: string;
   configId: string;
+  phoneNumberId: string;
   otherConfigId: string;
   conversationId: string;
   otherConversationId: string;
@@ -59,9 +60,10 @@ integrationDescribe("WhatsApp AI job durability and ownership", () => {
         { organization_id: organizationId, provider: "meta_whatsapp_cloud", phone_number_id: `ai-phone-a-${runId}`, business_account_id: "ai-business-a" },
         { organization_id: otherOrganizationId, provider: "meta_whatsapp_cloud", phone_number_id: `ai-phone-b-${runId}`, business_account_id: "ai-business-b" },
       ])
-      .select("id, organization_id");
+      .select("id, organization_id, phone_number_id");
     if (configs.error) throw configs.error;
     const configId = configs.data.find((row) => row.organization_id === organizationId)!.id;
+    const phoneNumberId = configs.data.find((row) => row.organization_id === organizationId)!.phone_number_id;
     const otherConfigId = configs.data.find((row) => row.organization_id === otherOrganizationId)!.id;
 
     const contacts = await admin
@@ -98,7 +100,7 @@ integrationDescribe("WhatsApp AI job durability and ownership", () => {
       .select("id")
       .single();
     if (outbound.error) throw outbound.error;
-    return { organizationId, otherOrganizationId, configId, otherConfigId, conversationId, otherConversationId, inboundMessageId: inbound.data.id, outboundMessageId: outbound.data.id };
+    return { organizationId, otherOrganizationId, configId, phoneNumberId, otherConfigId, conversationId, otherConversationId, inboundMessageId: inbound.data.id, outboundMessageId: outbound.data.id };
   }
 
   async function enqueue(inboundMessageId = fixture.inboundMessageId, conversationId = fixture.conversationId, organizationId = fixture.organizationId) {
@@ -184,7 +186,7 @@ integrationDescribe("WhatsApp AI job durability and ownership", () => {
     const providerMessageId = `wamid-status-${randomUUID()}`;
     const inserted = await admin.from("messages").insert({ organization_id: fixture.organizationId, conversation_id: fixture.conversationId, direction: "outbound", content: "Status reply", provider: "meta_whatsapp_cloud", provider_message_id: providerMessageId, delivery_status: "sent", delivery_status_at: new Date().toISOString() }).select("id").single();
     if (inserted.error) throw inserted.error;
-    const statusEvent = (status: "delivered" | "read") => ({ kind: "status" as const, provider: "meta_whatsapp_cloud" as const, organizationId: fixture.organizationId, configId: fixture.configId, phoneNumberId: "unused", businessAccountId: "unused", providerMessageId, status, timestamp: "2099-01-01T10:00:00.000Z", errorCode: null, errorMessage: null });
+    const statusEvent = (status: "delivered" | "read") => ({ kind: "status" as const, provider: "meta_whatsapp_cloud" as const, organizationId: fixture.organizationId, configId: fixture.configId, phoneNumberId: fixture.phoneNumberId, businessAccountId: "unused", providerMessageId, status, timestamp: "2099-01-01T10:00:00.000Z", errorCode: null, errorMessage: null });
     await applyWhatsAppStatusEvent(statusEvent("delivered"));
     await applyWhatsAppStatusEvent(statusEvent("read"));
     const row = await admin.from("messages").select("id, provider_message_id, delivery_status").eq("id", inserted.data.id).single();
