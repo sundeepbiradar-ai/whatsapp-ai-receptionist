@@ -281,11 +281,43 @@ integrationDescribe("Meta webhook test harness (simulated delivery, real pipelin
 
   it("deduplicates a repeated Meta message id and never replies twice", async () => {
     const messageId = `wamid.TEST_${runId.slice(0, 8)}_DUP`;
-    const first = await runMetaWebhookSimulation(payload({ messageId }));
-    const duplicate = await runMetaWebhookSimulation(payload({ messageId }));
 
+    async function outboundReplyCount(conversationId: string): Promise<number> {
+      const rows = await admin
+        .from("messages")
+        .select("id")
+        .eq("organization_id", organizationId)
+        .eq("direction", "outbound")
+        .eq("conversation_id", conversationId);
+      return rows.data?.length ?? 0;
+    }
+
+    // The contact/conversation is reused from earlier scenarios (the pipeline
+    // keeps exactly one open conversation per contact+config), so assert the
+    // reply-count DELTA on the reused conversation rather than an absolute
+    // count that would include earlier scenarios' replies.
+    const baselineCount = await (async () => {
+      const conversation = await admin
+        .from("conversations")
+        .select("id")
+        .eq("organization_id", organizationId)
+        .eq("status", "open")
+        .eq("channel", "whatsapp")
+        .eq("whatsapp_config_id", configId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      return conversation.data ? outboundReplyCount(conversation.data.id) : 0;
+    })();
+
+    const first = await runMetaWebhookSimulation(payload({ messageId }));
     const firstMessage = must(first.messages[0], "first processed message");
+    const afterFirstCount = await outboundReplyCount(firstMessage.processed.conversationId);
+
+    const duplicate = await runMetaWebhookSimulation(payload({ messageId }));
     const duplicateMessage = must(duplicate.messages[0], "duplicate processed message");
+    const afterDuplicateCount = await outboundReplyCount(firstMessage.processed.conversationId);
+
     expect(firstMessage.processed.duplicate).toBe(false);
     expect(duplicateMessage.processed).toMatchObject({
       contactId: firstMessage.processed.contactId,
@@ -299,6 +331,7 @@ integrationDescribe("Meta webhook test harness (simulated delivery, real pipelin
     });
     expect(duplicateMessage.outbound).toBeNull();
 
+    // The duplicate provider message id persists no second inbound row.
     const rows = await admin
       .from("messages")
       .select("id")
@@ -306,13 +339,9 @@ integrationDescribe("Meta webhook test harness (simulated delivery, real pipelin
       .eq("provider_message_id", messageId);
     expect(rows.data).toHaveLength(1);
 
-    const outboundRows = await admin
-      .from("messages")
-      .select("id")
-      .eq("organization_id", organizationId)
-      .eq("direction", "outbound")
-      .eq("conversation_id", firstMessage.processed.conversationId);
-    expect(outboundRows.data).toHaveLength(1);
+    // The first delivery produced exactly one reply; the duplicate added none.
+    expect(afterFirstCount).toBe(baselineCount + 1);
+    expect(afterDuplicateCount).toBe(afterFirstCount);
     expectNoProviderNetworkCalls();
   });
 
