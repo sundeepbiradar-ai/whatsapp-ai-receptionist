@@ -13,7 +13,7 @@ test.describe("Homepage", () => {
 
     // Check for hero content
     const heading = page.locator("h1");
-    await expect(heading).toContainText("AI Customer Operations");
+    await expect(heading).toContainText("Turn customer enquiries into organized conversations and appointments.");
   });
 
   test("should have working navigation links", async ({ page }) => {
@@ -23,33 +23,30 @@ test.describe("Homepage", () => {
     const featuresLink = page.locator('a[href="#features"]');
     await expect(featuresLink).toBeVisible();
 
-    const architectureLink = page.locator('a[href="#architecture"]');
-    await expect(architectureLink).toBeVisible();
+    const howItWorksLink = page.locator('a[href="#how-it-works"]');
+    await expect(howItWorksLink).toBeVisible();
   });
 
   test("should display features section", async ({ page }) => {
     await page.goto("/");
 
     // Check for features
-    const featuresSection = page.locator("text=Foundation Features");
+    const featuresSection = page.locator("text=Core features");
     await expect(featuresSection).toBeVisible();
   });
 
-  test("should navigate to dashboard", async ({ page }) => {
+  test("should navigate Sign in to login", async ({ page }) => {
     await page.goto("/");
 
-    // Click dashboard link
-    const dashboardLink = page.locator('a:has-text("View Dashboard")');
-    await dashboardLink.click();
+    await page.getByRole("link", { name: "Sign in" }).first().click();
 
-    // Unauthenticated users must be sent to login
     await expect(page).toHaveURL("/login");
   });
 
-  test("should navigate Get Started to signup", async ({ page }) => {
+  test("should navigate Get started to signup", async ({ page }) => {
     await page.goto("/");
 
-    await page.getByRole("link", { name: "Get Started" }).click();
+    await page.getByRole("link", { name: "Get started" }).first().click();
 
     await expect(page).toHaveURL("/signup");
   });
