@@ -7,7 +7,8 @@ import type { ConversationState } from "@/lib/ai/conversation-state";
 
 const maxReplyOutputTokens = 220;
 const defaultReplyTimeoutMs = 8_000;
-const safeFallbackReply =
+/** Exported so tests and the test-only harness can detect fallback replies. */
+export const safeFallbackReply =
   "Thanks for your message. Our team will get back to you shortly to help with your appointment.";
 
 const baseSystemPrompt = `You are a WhatsApp receptionist assistant for a clinic.

@@ -60,7 +60,8 @@ export const environmentContract: EnvVariable[] = [
     name: "SUPABASE_TEST_URL",
     scope: "test-only",
     required: false,
-    description: "Integration tests only. Never set in production.",
+    description:
+      "Dedicated non-production test project. Integration tests and the WhatsApp test harness target guard. Never set in production.",
   },
   {
     name: "SUPABASE_TEST_ANON_KEY",
@@ -73,6 +74,13 @@ export const environmentContract: EnvVariable[] = [
     scope: "test-only",
     required: false,
     description: "Integration tests only. Never set in production.",
+  },
+  {
+    name: "WHATSAPP_TEST_HARNESS_ENABLED",
+    scope: "test-only",
+    required: false,
+    description:
+      "Set to \"true\" to enable the POST /api/test/whatsapp/meta-harness development harness. Also requires NEXT_PUBLIC_SUPABASE_URL to equal SUPABASE_TEST_URL, and is always disabled when NODE_ENV is production. Never set in production.",
   },
 ];
 
