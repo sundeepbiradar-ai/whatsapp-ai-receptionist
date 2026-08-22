@@ -19,6 +19,15 @@ function formatDate(value: string | null): string {
   return value ? new Date(value).toLocaleString() : "No messages yet";
 }
 
+function statusBadgeClass(status: Conversation["status"]): string {
+  return status === "open" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-600";
+}
+
+function formatChannel(channel: string | null): string {
+  if (channel === "whatsapp") return "WhatsApp";
+  return channel ?? "Unknown channel";
+}
+
 export default async function ConversationsPage({
   searchParams,
 }: ConversationsPageProps): Promise<React.ReactElement> {
@@ -84,29 +93,47 @@ export default async function ConversationsPage({
             <Link className="button-secondary mt-5" href="/dashboard/contacts">View contacts</Link>
           </section>
         ) : (
-          <section className="mt-8 overflow-hidden rounded-lg border border-gray-200 bg-white">
-            <div className="border-b border-gray-200 px-5 py-4 text-sm text-gray-600">
+          <section aria-label="Conversations" className="mt-8">
+            <p className="text-sm text-gray-600">
               {filteredConversations.length} conversation{filteredConversations.length === 1 ? "" : "s"}
-            </div>
-            <div className="divide-y divide-gray-100">
+            </p>
+            <ul className="mt-4 space-y-3">
               {filteredConversations.map((conversation) => {
                 const contact = contactsById.get(conversation.contact_id);
                 return (
-                  <Link className="block px-5 py-4 hover:bg-gray-50" href={`/dashboard/conversations/${conversation.id}`} key={conversation.id}>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h2 className="font-semibold text-gray-900">{contact?.name ?? "Unknown contact"}</h2>
-                        <p className="mt-1 text-sm text-gray-600">{contact?.phone ?? "Contact unavailable"}</p>
+                  <li key={conversation.id}>
+                    <Link
+                      className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:border-primary-300 hover:shadow-md sm:p-5"
+                      href={`/dashboard/conversations/${conversation.id}`}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-gray-900">{contact?.name ?? "Unknown contact"}</p>
+                        <p className="mt-1 truncate text-sm text-gray-600">{contact?.phone ?? "Contact unavailable"}</p>
+                        <p className="mt-1 text-xs text-gray-500">{formatChannel(conversation.channel)}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium capitalize text-gray-700">{conversation.status}</p>
-                        <p className="mt-1 text-xs text-gray-500">{formatDate(conversation.last_message_at)}</p>
+                      <div className="flex shrink-0 items-center gap-4">
+                        <div className="text-right">
+                          <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium capitalize ${statusBadgeClass(conversation.status)}`}>
+                            {conversation.status}
+                          </span>
+                          <p className="mt-1 text-xs text-gray-500">{formatDate(conversation.last_message_at)}</p>
+                        </div>
+                        <svg
+                          aria-hidden="true"
+                          className="h-5 w-5 shrink-0 text-gray-400"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
                       </div>
-                    </div>
-                  </Link>
+                    </Link>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           </section>
         )}
       </div>
