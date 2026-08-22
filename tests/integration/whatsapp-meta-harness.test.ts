@@ -26,13 +26,21 @@ vi.mock("server-only", () => ({}));
  * receptionist orchestration (intent classification, scheduling extraction and
  * reply generation) all call requestModelCompletion; stubbing it here lets CI
  * prove that seeded FAQ/instructions and conversation context genuinely reach
- * the model, without a live OpenAI call. Tests that leave the stub unset use
- * the REAL no-API-key path (CI has no OPENAI_API_KEY), proving safe fallback.
+ * the model, without a live OpenAI call.
+ *
+ * `enabled` scopes the stub to the "Meta harness AI receptionist interactions"
+ * describe block only: while disabled (the pre-existing base harness block),
+ * every call is delegated to the REAL requestModelCompletion, so the original
+ * no-OPENAI_API_KEY failure/fallback path is exercised exactly as before.
+ * `replyShouldFail` targets a failure at the reply-generation call
+ * specifically (identified by its system prompt), regardless of call order.
  */
 const modelStub = vi.hoisted(() => ({
+  enabled: false,
   calls: [] as { role: string; content: string }[][],
   intentReply: null as string | null,
   replyText: null as string | null,
+  replyShouldFail: false,
 }));
 
 vi.mock("@/lib/ai/provider", async (importOriginal) => {
@@ -40,11 +48,16 @@ vi.mock("@/lib/ai/provider", async (importOriginal) => {
   return {
     ...actual,
     requestModelCompletion: vi.fn(
-      async (request: { messages: { role: string; content: string }[] }) => {
+      async (request: Parameters<typeof actual.requestModelCompletion>[0]) => {
+        if (!modelStub.enabled) return actual.requestModelCompletion(request);
         modelStub.calls.push(request.messages);
         const system = request.messages[0]?.content ?? "";
         // Reply-generation calls carry the business context system prompt.
-        if (system.includes("WhatsApp receptionist assistant")) {
+        const isReplyGeneration = system.includes("WhatsApp receptionist assistant");
+        if (isReplyGeneration && modelStub.replyShouldFail) {
+          throw new Error("simulated provider failure");
+        }
+        if (isReplyGeneration) {
           return modelStub.replyText ?? "Thanks for reaching out! How can I help today?";
         }
         // Intent classification and extraction calls return JSON.
@@ -452,6 +465,7 @@ integrationDescribe("Meta harness AI receptionist interactions", () => {
     "We are open Monday to Friday, 9 AM to 5 PM. Never discuss pricing.";
 
   beforeAll(async () => {
+    modelStub.enabled = true;
     const cfg = requireConfig();
     admin = adminClient();
     process.env["NEXT_PUBLIC_SUPABASE_URL"] = cfg.url;
@@ -525,6 +539,7 @@ integrationDescribe("Meta harness AI receptionist interactions", () => {
   });
 
   afterAll(async () => {
+    modelStub.enabled = false;
     vi.unstubAllEnvs();
     fetchSpy.mockRestore();
     if (organizationIds.length > 0)
@@ -566,6 +581,7 @@ integrationDescribe("Meta harness AI receptionist interactions", () => {
     modelStub.calls = [];
     modelStub.intentReply = null;
     modelStub.replyText = null;
+    modelStub.replyShouldFail = false;
   });
 
   it("answers a greeting with a polite receptionist reply and no appointment mutation", async () => {
@@ -870,15 +886,15 @@ integrationDescribe("Meta harness AI receptionist interactions", () => {
   });
 
   it("uses the exact safe fallback and still captures outbound when the AI provider fails", async () => {
-    // Simulate a provider failure by making the reply-generation call throw;
-    // generateReceptionistReply must fall back to the fixed safe message rather
-    // than crash, and the harness must still capture the simulated outbound.
+    // Target the failure at the reply-generation call specifically (the mock
+    // identifies it by its system prompt): intent classification and
+    // scheduling/tool planning still run for real and succeed, only the
+    // reply-generation call fails, so generateReceptionistReply must fall
+    // back to the fixed safe message rather than crash, and the harness must
+    // still capture the simulated outbound.
     modelStub.intentReply = '{"intent":"query_appointment"}';
     modelStub.replyText = null;
-    const provider = await import("@/lib/ai/provider");
-    const replyFailure = vi
-      .mocked(provider.requestModelCompletion)
-      .mockRejectedValueOnce(new Error("simulated provider failure"));
+    modelStub.replyShouldFail = true;
 
     const result = await runMetaWebhookSimulation(
       payload({
@@ -887,18 +903,19 @@ integrationDescribe("Meta harness AI receptionist interactions", () => {
         text: "Do you have any appointments available next week?",
       })
     );
-    replyFailure.mockReset();
     const message = must(result.messages[0], "fallback message");
 
-    // Deterministic invariant: the reply is either the stubbed model output or
-    // the exact safe fallback; when the fallback is used it is flagged as such.
-    // The fallback path is covered deterministically by the existing block's
-    // no-API-key scenarios (fallbackUsed === true there).
-    const reply = message.outbound?.capturedText ?? "";
-    expect(reply === "Let me check your upcoming appointments for you." || reply === safeFallbackReply).toBe(
-      true
+    // Proves intent classification succeeded as query_appointment and the
+    // real query_appointments tool executed: only that path produces this
+    // exact scheduling-context text in the (failing) reply-generation call.
+    const replyCall = modelStub.calls.find((c) =>
+      (c[0]?.content ?? "").includes("WhatsApp receptionist assistant")
     );
-    expect(message.ai.fallbackUsed).toBe(reply === safeFallbackReply);
+    expect(replyCall?.[0]?.content).toContain("No upcoming appointments were found for this contact.");
+
+    const reply = message.outbound?.capturedText ?? "";
+    expect(reply).toBe(safeFallbackReply);
+    expect(message.ai.fallbackUsed).toBe(true);
     expect(message.outbound?.providerMessageId).toContain(simulatedProviderMessageIdPrefix);
     expectNoProviderNetworkCalls();
     expectNoOpenAICalls();
