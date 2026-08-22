@@ -6,7 +6,7 @@ import ForgotPasswordPage from "@/app/forgot-password/page";
 import ResetPasswordPage from "@/app/reset-password/page";
 import { GET as authCallbackHandler } from "@/app/auth/callback/route";
 import { requestPasswordResetAction, updatePasswordAction } from "@/lib/auth/actions";
-import { getExchangeRedirectType, passwordRecoveryCookie } from "@/lib/auth/recovery";
+import { getExchangeRedirectType, passwordRecoveryCookie, passwordResetSuccessPath } from "@/lib/auth/recovery";
 import {
   authFormSchema,
   getOrganizationValues,
@@ -39,6 +39,12 @@ vi.mock("react-dom", async () => {
 
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabaseClient: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn((url: string) => {
+    throw new Error(`NEXT_REDIRECT:${url}`);
+  }),
 }));
 
 async function getRecoveryCookieStore(): Promise<Map<string, string>> {
@@ -283,6 +289,57 @@ describe("reset password page recovery gating", () => {
 
     expect(html).toContain("Set new password");
   });
+
+  it("shows a stable success state after the recovery session has been consumed", async () => {
+    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
+    const getUser = vi.fn().mockResolvedValue({ data: { user: null }, error: null });
+
+    // Post-reset conditions: recovery cookie cleared and the user signed out.
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({ auth: { getUser } } as never);
+
+    const html = renderToStaticMarkup(
+      await ResetPasswordPage({ searchParams: Promise.resolve({ status: "updated" }) })
+    );
+
+    expect(html).toContain("Password updated");
+    expect(html).toContain("Your password has been changed successfully.");
+    expect(html).toContain("Sign in");
+    expect(html).not.toContain("Password reset unavailable");
+    expect(getUser).not.toHaveBeenCalled();
+  });
+
+  it("still shows the safe unavailable state for an invalid or expired recovery link", async () => {
+    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
+
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: { message: "no session" } }),
+      },
+    } as never);
+
+    const html = renderToStaticMarkup(
+      await ResetPasswordPage({ searchParams: Promise.resolve({ error: "invalid" }) })
+    );
+
+    expect(html).toContain("Password reset unavailable");
+    expect(html).not.toContain("Password updated");
+  });
+
+  it("does not unlock the form for a status value that is not the success marker", async () => {
+    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
+
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "signed-in-user" } }, error: null }),
+      },
+    } as never);
+
+    const html = renderToStaticMarkup(
+      await ResetPasswordPage({ searchParams: Promise.resolve({ status: "anything-else" }) })
+    );
+
+    expect(html).toContain("Password reset unavailable");
+  });
 });
 
 describe("getExchangeRedirectType (isolated internal-API guard)", () => {
@@ -314,22 +371,40 @@ describe("getExchangeRedirectType (isolated internal-API guard)", () => {
 });
 
 describe("password update action", () => {
+  beforeEach(async () => {
+    (await getRecoveryCookieStore()).clear();
+  });
+
   it("rejects mismatched passwords before contacting Supabase", async () => {
+    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
+    const updateUser = vi.fn();
+
+    (await getRecoveryCookieStore()).set(passwordRecoveryCookie, "user-mismatch");
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-mismatch" } }, error: null }),
+        updateUser,
+      },
+    } as never);
+
     const formData = new FormData();
     formData.set("password", "correct-horse-1");
     formData.set("confirmPassword", "different-horse-2");
 
     const result = await updatePasswordAction({}, formData);
 
+    expect(updateUser).not.toHaveBeenCalled();
     expect(result).toEqual({ error: "Passwords do not match." });
   });
 
   it("rejects the update when there is no verified recovery session", async () => {
     const { createServerSupabaseClient } = await import("@/lib/supabase/server");
+    const updateUser = vi.fn();
 
     vi.mocked(createServerSupabaseClient).mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-no-recovery" } }, error: null }),
+        updateUser,
       },
     } as never);
 
@@ -339,12 +414,38 @@ describe("password update action", () => {
 
     const result = await updatePasswordAction({}, formData);
 
+    expect(updateUser).not.toHaveBeenCalled();
     expect(result).toEqual({
       error: "This password reset link is invalid or has expired. Please request a new reset email.",
     });
   });
 
-  it("updates the password and signs the user out on success", async () => {
+  it("rejects the update when the recovery cookie belongs to another user", async () => {
+    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
+    const updateUser = vi.fn();
+
+    (await getRecoveryCookieStore()).set(passwordRecoveryCookie, "some-other-user");
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "signed-in-user" } }, error: null }),
+        updateUser,
+      },
+    } as never);
+
+    const formData = new FormData();
+    formData.set("password", "new-password-123");
+    formData.set("confirmPassword", "new-password-123");
+
+    const result = await updatePasswordAction({}, formData);
+
+    expect(updateUser).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      error: "This password reset link is invalid or has expired. Please request a new reset email.",
+    });
+    expect((await getRecoveryCookieStore()).get(passwordRecoveryCookie)).toBe("");
+  });
+
+  it("updates the password, consumes recovery, signs out and redirects to the stable success state", async () => {
     const { createServerSupabaseClient } = await import("@/lib/supabase/server");
 
     (await getRecoveryCookieStore()).set(passwordRecoveryCookie, "user-success");
@@ -363,13 +464,13 @@ describe("password update action", () => {
     formData.set("password", "brand-new-password");
     formData.set("confirmPassword", "brand-new-password");
 
-    const result = await updatePasswordAction({}, formData);
+    await expect(updatePasswordAction({}, formData)).rejects.toThrow(
+      `NEXT_REDIRECT:${passwordResetSuccessPath}`
+    );
 
+    expect(updateUser).toHaveBeenCalledTimes(1);
     expect(updateUser).toHaveBeenCalledWith({ password: "brand-new-password" });
     expect(signOut).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({
-      message: "Your password has been updated successfully. Please sign in with your new password.",
-    });
     expect((await getRecoveryCookieStore()).get(passwordRecoveryCookie)).toBe("");
   });
 

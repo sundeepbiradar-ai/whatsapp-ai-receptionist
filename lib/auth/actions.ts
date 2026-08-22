@@ -7,6 +7,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   clearPasswordRecoverySession,
   hasPasswordRecoverySession,
+  passwordResetSuccessPath,
 } from "@/lib/auth/recovery";
 import {
   getOrganizationValues,
@@ -142,9 +143,10 @@ export async function updatePasswordAction(
     };
   }
 
-  return {
-    message: "Your password has been updated successfully. Please sign in with your new password.",
-  };
+  // The recovery session has just been consumed, so re-rendering the gated
+  // form would show "Password reset unavailable". Redirect to the ungated
+  // confirmation instead.
+  redirect(passwordResetSuccessPath);
 }
 
 export async function logoutAction(): Promise<void> {

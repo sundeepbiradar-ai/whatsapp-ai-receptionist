@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useFormState, useFormStatus } from "react-dom";
 
 import { updatePasswordAction } from "@/lib/auth/actions";
@@ -58,16 +57,8 @@ export function ResetPasswordForm(): React.ReactElement {
           {state.error}
         </p>
       )}
-      {state.message && (
-        <div aria-live="polite" className="space-y-3 rounded-md bg-green-50 p-3 text-sm text-green-700" role="status">
-          <p>{state.message}</p>
-          <Link className="font-medium text-primary-700 hover:text-primary-800" href="/login">
-            Back to sign in
-          </Link>
-        </div>
-      )}
 
-      {!state.message && <SubmitButton />}
+      <SubmitButton />
     </form>
   );
 }

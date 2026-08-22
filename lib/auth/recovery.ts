@@ -12,6 +12,15 @@ import { cookies } from "next/headers";
 export const passwordRecoveryCookie = "password-recovery-session";
 export const passwordRecoveryCookieMaxAge = 60 * 15;
 
+/**
+ * The recovery authorization is deliberately consumed as soon as the password
+ * changes, so the success confirmation cannot live on the gated form render.
+ * It is a fixed, app-controlled path (no caller-supplied redirect target) that
+ * only renders a static confirmation and grants no authorization by itself.
+ */
+export const passwordResetSuccessStatus = "updated";
+export const passwordResetSuccessPath = `/reset-password?status=${passwordResetSuccessStatus}`;
+
 export const passwordRecoveryCookieOptions = {
   httpOnly: true,
   sameSite: "lax" as const,
