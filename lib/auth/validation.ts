@@ -7,7 +7,23 @@ export const authFormSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters."),
 });
 
+export const passwordResetEmailSchema = authFormSchema.pick({
+  email: true,
+});
+
+export const passwordUpdateSchema = z
+  .object({
+    password: z.string().min(8, "Password must be at least 8 characters."),
+    confirmPassword: z.string().min(8, "Password must be at least 8 characters."),
+  })
+  .refine((values) => values.password === values.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"],
+  });
+
 export type AuthFormValues = z.infer<typeof authFormSchema>;
+export type PasswordResetEmailValues = z.infer<typeof passwordResetEmailSchema>;
+export type PasswordUpdateValues = z.infer<typeof passwordUpdateSchema>;
 
 export type AuthActionState = {
   error?: string;
@@ -35,6 +51,19 @@ export function getAuthFormValues(formData: FormData): AuthFormValues {
   return authFormSchema.parse({
     email: formData.get("email"),
     password: formData.get("password"),
+  });
+}
+
+export function getPasswordResetEmailValues(formData: FormData): PasswordResetEmailValues {
+  return passwordResetEmailSchema.parse({
+    email: formData.get("email"),
+  });
+}
+
+export function getPasswordUpdateValues(formData: FormData): PasswordUpdateValues {
+  return passwordUpdateSchema.parse({
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
   });
 }
 

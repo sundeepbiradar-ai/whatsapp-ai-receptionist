@@ -46,9 +46,16 @@ export function AuthForm({ mode, action }: AuthFormProps): React.ReactElement {
       </div>
 
       <div>
-        <label className="mb-2 block text-sm font-medium text-gray-900" htmlFor="password">
-          Password
-        </label>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <label className="block text-sm font-medium text-gray-900" htmlFor="password">
+            Password
+          </label>
+          {isLogin && (
+            <Link className="text-sm font-medium text-primary-700 hover:text-primary-800" href="/forgot-password">
+              Forgot password?
+            </Link>
+          )}
+        </div>
         <input
           autoComplete={isLogin ? "current-password" : "new-password"}
           className="block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"

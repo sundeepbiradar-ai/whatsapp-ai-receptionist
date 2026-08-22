@@ -5,9 +5,15 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
+  clearPasswordRecoverySession,
+  hasPasswordRecoverySession,
+} from "@/lib/auth/recovery";
+import {
   getOrganizationValues,
   getAuthErrorMessage,
   getAuthFormValues,
+  getPasswordResetEmailValues,
+  getPasswordUpdateValues,
   type AuthActionState,
 } from "@/lib/auth/validation";
 import type { Database } from "@/lib/supabase/database";
@@ -70,6 +76,75 @@ export async function loginAction(
   }
 
   redirect("/dashboard");
+}
+
+export async function requestPasswordResetAction(
+  _previousState: AuthActionState,
+  formData: FormData
+): Promise<AuthActionState> {
+  try {
+    const { email } = getPasswordResetEmailValues(formData);
+    const supabase = await createServerSupabaseClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${getSiteUrl()}/auth/callback?type=recovery`,
+    });
+
+    if (error) {
+      return {
+        message: "If an account exists for that email, we've sent password reset instructions.",
+      };
+    }
+  } catch {
+    return {
+      message: "If an account exists for that email, we've sent password reset instructions.",
+    };
+  }
+
+  return {
+    message: "If an account exists for that email, we've sent password reset instructions.",
+  };
+}
+
+export async function updatePasswordAction(
+  _previousState: AuthActionState,
+  formData: FormData
+): Promise<AuthActionState> {
+  try {
+    const { password } = getPasswordUpdateValues(formData);
+    const supabase = await createServerSupabaseClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user || !(await hasPasswordRecoverySession(user.id))) {
+      await clearPasswordRecoverySession();
+      return {
+        error: "This password reset link is invalid or has expired. Please request a new reset email.",
+      };
+    }
+
+    const { error } = await supabase.auth.updateUser({ password });
+
+    if (error) {
+      await clearPasswordRecoverySession();
+      return {
+        error: "We could not update your password. Please request a new reset link and try again.",
+      };
+    }
+
+    await clearPasswordRecoverySession();
+    await supabase.auth.signOut();
+  } catch (error) {
+    await clearPasswordRecoverySession();
+    return {
+      error: getAuthErrorMessage(error),
+    };
+  }
+
+  return {
+    message: "Your password has been updated successfully. Please sign in with your new password.",
+  };
 }
 
 export async function logoutAction(): Promise<void> {
